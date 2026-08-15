@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -6,8 +7,12 @@ import { createClient } from "@/lib/supabase/server";
  * signed-in user's business_id server-side — callers never pass business_id
  * themselves, so a compromised client can't forge access to another tenant.
  * (RLS is still the real backstop; this just keeps queries scoped correctly.)
+ *
+ * Wrapped in React's cache() so the layout and the page it wraps share one
+ * result instead of each re-checking auth + re-querying the profile —
+ * without this, a single navigation was doing it twice.
  */
-export async function getBusinessContext() {
+export const getBusinessContext = cache(async () => {
   const supabase = await createClient();
 
   const {
@@ -27,4 +32,4 @@ export async function getBusinessContext() {
   const businessName = (profile.businesses as unknown as { name: string } | null)?.name ?? "Cafe";
 
   return { supabase, businessId: profile.business_id as string, businessName, userEmail: user.email };
-}
+});
