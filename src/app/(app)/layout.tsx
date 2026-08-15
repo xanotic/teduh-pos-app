@@ -5,7 +5,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { businessName } = await getBusinessContext();
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone-50">
+    <div className="flex min-h-screen flex-col bg-bg">
       <Nav businessName={businessName} />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">{children}</main>
     </div>

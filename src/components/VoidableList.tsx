@@ -18,7 +18,7 @@ export function VoidableList({
   const [, startTransition] = useTransition();
 
   if (!transactions.length) {
-    return <p className="text-sm text-stone-400">{emptyLabel}</p>;
+    return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
   }
 
   return (
@@ -33,19 +33,19 @@ export function VoidableList({
         const itemsStr = t.transaction_items.map((i) => `${i.qty}× ${i.name}`).join(", ");
 
         return (
-          <div key={t.id} className="rounded-xl border border-stone-200 bg-white p-3">
-            <div className="flex items-center justify-between text-xs text-stone-400">
+          <div key={t.id} className="rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center justify-between text-xs text-ink-muted">
               <span>
                 {time}
                 {t.payment_method && (
-                  <span className="ml-2 rounded-full bg-rose-50 px-2 py-0.5 font-bold text-rose-800">
+                  <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 font-bold text-accent">
                     {t.payment_method === "Cash" ? "💵 Cash" : t.payment_method === "QR Pay" ? "🔳 QR" : "🎁 Giveaway"}
                   </span>
                 )}
               </span>
-              <span className="text-sm font-bold text-stone-800">{fmt(Number(t.total))}</span>
+              <span className="text-sm font-bold text-ink">{fmt(Number(t.total))}</span>
             </div>
-            <div className="mt-1 text-sm text-stone-600">
+            <div className="mt-1 text-sm text-ink-muted">
               {itemsStr}
               {showNote && t.note ? ` — ${t.note}` : ""}
             </div>
@@ -60,8 +60,8 @@ export function VoidableList({
               }
               className={`mt-2 rounded-md border px-2.5 py-1 text-xs font-bold ${
                 confirmId === t.id
-                  ? "border-red-600 bg-red-600 text-white"
-                  : "border-red-300 text-red-600"
+                  ? "border-danger bg-danger text-white"
+                  : "border-danger text-danger"
               }`}
             >
               {confirmId === t.id ? "Tap again to void" : "Void"}

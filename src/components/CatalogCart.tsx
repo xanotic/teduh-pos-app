@@ -91,8 +91,8 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
               onClick={() => setCategory(c)}
               className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
                 category === c
-                  ? "border-rose-800 bg-rose-50 text-rose-900"
-                  : "border-stone-200 bg-white text-stone-500"
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border bg-surface text-ink-muted"
               }`}
             >
               {c === "ALL" ? "All" : c.charAt(0) + c.slice(1).toLowerCase()}
@@ -105,41 +105,41 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
             <button
               key={it.id}
               onClick={() => addToCart(it)}
-              className="flex flex-col gap-1.5 rounded-2xl border border-stone-200 bg-white p-3.5 text-left shadow-sm active:scale-95"
+              className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-3.5 text-left shadow-sm active:scale-95"
             >
-              <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
                 {it.category}
               </span>
-              <span className="text-sm font-semibold text-stone-800">{it.name}</span>
-              <span className={`mt-auto text-sm font-bold ${it.price > 0 ? "text-rose-900" : "text-stone-400"}`}>
+              <span className="text-sm font-semibold text-ink">{it.name}</span>
+              <span className={`mt-auto text-sm font-bold ${it.price > 0 ? "text-accent" : "text-ink-muted"}`}>
                 {it.price > 0 ? fmt(it.price) : "Set price"}
               </span>
             </button>
           ))}
           {visible.length === 0 && (
-            <p className="col-span-full text-sm text-stone-400">No items match.</p>
+            <p className="col-span-full text-sm text-ink-muted">No items match.</p>
           )}
         </div>
       </div>
 
-      <aside className="h-fit rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-bold text-stone-800">
+      <aside className="h-fit rounded-2xl border border-border bg-surface p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-bold text-ink">
           {mode === "giveaway" ? "Giveaway Cart" : "Current Order"}
         </h2>
 
         <div className="flex flex-col gap-2">
           {cart.map((l) => (
-            <div key={l.itemId} className="flex items-center gap-2 rounded-xl bg-stone-50 px-3 py-2">
+            <div key={l.itemId} className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2">
               <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-semibold text-stone-800">{l.name}</div>
-                <div className="text-xs text-stone-400">{fmt(l.price)} each</div>
+                <div className="truncate text-sm font-semibold text-ink">{l.name}</div>
+                <div className="text-xs text-ink-muted">{fmt(l.price)} each</div>
               </div>
-              <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-1">
-                <button onClick={() => changeQty(l.itemId, -1)} className="h-6 w-6 rounded-full bg-stone-100 text-sm font-bold">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-1">
+                <button onClick={() => changeQty(l.itemId, -1)} className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold">
                   −
                 </button>
                 <span className="w-4 text-center text-sm font-bold">{l.qty}</span>
-                <button onClick={() => changeQty(l.itemId, 1)} className="h-6 w-6 rounded-full bg-stone-100 text-sm font-bold">
+                <button onClick={() => changeQty(l.itemId, 1)} className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold">
                   +
                 </button>
               </div>
@@ -147,7 +147,7 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
             </div>
           ))}
           {cart.length === 0 && (
-            <p className="py-6 text-center text-sm text-stone-400">Tap items to add them.</p>
+            <p className="py-6 text-center text-sm text-ink-muted">Tap items to add them.</p>
           )}
         </div>
 
@@ -160,9 +160,9 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
           />
         )}
 
-        <div className="mt-4 flex items-center justify-between text-sm text-stone-500">
+        <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
           <span>{count} {count === 1 ? "item" : "items"}</span>
-          <span className="text-lg font-extrabold text-stone-900">{fmt(total)}</span>
+          <span className="text-lg font-extrabold text-ink">{fmt(total)}</span>
         </div>
 
         {mode === "sell" ? (
@@ -170,14 +170,14 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
             <button
               disabled={!cart.length || pending}
               onClick={() => checkout("Cash")}
-              className="rounded-xl bg-emerald-700 py-3.5 text-sm font-bold text-white disabled:opacity-40"
+              className="rounded-xl bg-success py-3.5 text-sm font-bold text-white disabled:opacity-40"
             >
               💵 Cash
             </button>
             <button
               disabled={!cart.length || pending}
               onClick={() => checkout("QR Pay")}
-              className="rounded-xl bg-amber-600 py-3.5 text-sm font-bold text-white disabled:opacity-40"
+              className="rounded-xl bg-gold py-3.5 text-sm font-bold text-white disabled:opacity-40"
             >
               🔳 QR Pay
             </button>
@@ -186,14 +186,14 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
           <button
             disabled={!cart.length || pending}
             onClick={() => checkout("Giveaway")}
-            className="mt-3 w-full rounded-xl bg-rose-900 py-3.5 text-sm font-bold text-white disabled:opacity-40"
+            className="mt-3 w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white disabled:opacity-40"
           >
             🎁 Log Giveaway
           </button>
         )}
 
         {toast && (
-          <div className="mt-3 rounded-lg bg-stone-900 px-3 py-2 text-center text-xs font-semibold text-white">
+          <div className="mt-3 rounded-lg bg-ink px-3 py-2 text-center text-xs font-semibold text-white">
             {toast}
           </div>
         )}

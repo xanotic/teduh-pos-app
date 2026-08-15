@@ -18,9 +18,9 @@ function status(days: number): "expired" | "soon" | "ok" {
 }
 
 const STATUS_STYLE = {
-  expired: "bg-red-50 text-red-700",
-  soon: "bg-amber-50 text-amber-700",
-  ok: "bg-emerald-50 text-emerald-700",
+  expired: "bg-danger-soft text-danger",
+  soon: "bg-surface-alt text-gold",
+  ok: "bg-success-soft text-success",
 };
 
 export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntry[]; menuNames: string[] }) {
@@ -45,17 +45,17 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-bold text-stone-900">Item Shelf Life</h1>
-      <p className="mb-5 text-sm text-stone-500">
+      <h1 className="text-xl font-bold text-ink">Item Shelf Life</h1>
+      <p className="mb-5 text-sm text-ink-muted">
         Track expiry per batch. Sorted soonest-to-expire first — update whenever new stock comes in.
       </p>
 
       <form
         onSubmit={handleAdd}
-        className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:grid-cols-4 sm:items-end"
+        className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-4 sm:items-end"
       >
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-stone-400">Item</label>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Item</label>
           <input
             value={item}
             onChange={(e) => setItem(e.target.value)}
@@ -70,13 +70,13 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
           </datalist>
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
             Expiration Date
           </label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
             Notes
           </label>
           <input
@@ -88,7 +88,7 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
         </div>
         <button
           disabled={pending}
-          className="rounded-lg bg-rose-900 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
         >
           Add
         </button>
@@ -107,10 +107,10 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
                   : `${d}d left`
                 : `${d}d left`;
           return (
-            <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800">{e.item}</span>
-              {e.notes && <span className="basis-full text-xs text-stone-400">{e.notes}</span>}
-              <span className="text-xs text-stone-400">
+            <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{e.item}</span>
+              {e.notes && <span className="basis-full text-xs text-ink-muted">{e.notes}</span>}
+              <span className="text-xs text-ink-muted">
                 {new Date(e.expires_at + "T00:00:00").toLocaleDateString(undefined, {
                   month: "short",
                   day: "numeric",
@@ -128,7 +128,7 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
                     : setConfirmId(e.id)
                 }
                 className={`rounded-md px-2 py-1 text-xs font-bold ${
-                  confirmId === e.id ? "bg-red-600 text-white" : "bg-stone-100 text-red-600"
+                  confirmId === e.id ? "bg-danger text-white" : "bg-surface-alt text-danger"
                 }`}
               >
                 {confirmId === e.id ? "✔" : "✕"}
@@ -137,7 +137,7 @@ export function ShelfLifeClient({ entries, menuNames }: { entries: ShelfLifeEntr
           );
         })}
         {sorted.length === 0 && (
-          <p className="text-sm text-stone-400">No shelf-life entries yet. Add one above whenever new stock comes in.</p>
+          <p className="text-sm text-ink-muted">No shelf-life entries yet. Add one above whenever new stock comes in.</p>
         )}
       </div>
     </div>

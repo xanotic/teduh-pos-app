@@ -17,13 +17,13 @@ export function Nav({ businessName }: { businessName: string }) {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 sm:px-6">
       <div className="flex items-baseline gap-2">
-        <span className="text-xl font-extrabold tracking-tight text-rose-900">{businessName}</span>
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">POS</span>
+        <span className="text-xl font-extrabold tracking-tight text-accent">{businessName}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">POS</span>
       </div>
 
-      <nav className="order-3 flex w-full gap-1 overflow-x-auto rounded-xl bg-stone-100 p-1 sm:order-none sm:w-auto">
+      <nav className="order-3 flex w-full gap-1 overflow-x-auto rounded-xl bg-surface-alt p-1 sm:order-none sm:w-auto">
         {TABS.map((tab) => {
           const active = pathname.startsWith(tab.href);
           return (
@@ -31,7 +31,7 @@ export function Nav({ businessName }: { businessName: string }) {
               key={tab.href}
               href={tab.href}
               className={`flex-none rounded-lg px-3.5 py-2 text-sm font-semibold whitespace-nowrap ${
-                active ? "bg-rose-900 text-white" : "text-stone-500 hover:text-stone-800"
+                active ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
               }`}
             >
               {tab.label}
@@ -41,7 +41,7 @@ export function Nav({ businessName }: { businessName: string }) {
       </nav>
 
       <form action={logOut}>
-        <button type="submit" className="text-sm font-semibold text-stone-400 hover:text-stone-700">
+        <button type="submit" className="text-sm font-semibold text-ink-muted hover:text-ink">
           Log out
         </button>
       </form>

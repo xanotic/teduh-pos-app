@@ -22,10 +22,10 @@ export default async function SellPage() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-stone-900">Sell</h1>
+        <h1 className="text-xl font-bold text-ink">Sell</h1>
         <div className="text-right">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-stone-400">Today</div>
-          <div className="text-lg font-extrabold text-emerald-700">{fmt(todayTotal)}</div>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Today</div>
+          <div className="text-lg font-extrabold text-success">{fmt(todayTotal)}</div>
         </div>
       </div>
       <CatalogCart items={(items ?? []) as MenuItem[]} mode="sell" />
