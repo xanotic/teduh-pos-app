@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { MenuItem } from "@/lib/types";
 import { addMenuItem, deleteMenuItem, updateMenuItem } from "./actions";
+import { importLegacyBackup } from "./importActions";
 
 export function MenuClient({ items }: { items: MenuItem[] }) {
   const [pending, startTransition] = useTransition();
@@ -11,6 +12,9 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [importText, setImportText] = useState("");
+  const [importPending, startImport] = useTransition();
+  const [importResult, setImportResult] = useState<string | null>(null);
 
   const byCategory = items.reduce<Record<string, MenuItem[]>>((acc, it) => {
     (acc[it.category] ??= []).push(it);
@@ -115,6 +119,41 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
       {items.length === 0 && (
         <p className="text-sm text-stone-400">No menu items yet — add your first one above.</p>
       )}
+
+      <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-1 text-sm font-bold text-stone-800">Import from old backup</h2>
+        <p className="mb-3 text-xs text-stone-500">
+          Paste the JSON from a &quot;Back Up to Google Drive&quot; snapshot from the old app. Menu items
+          are matched by name (updates price/cost if already here, adds if new); every transaction in
+          the file gets imported fresh — only run this once per file, or sales will be duplicated.
+        </p>
+        <textarea
+          value={importText}
+          onChange={(e) => setImportText(e.target.value)}
+          placeholder="Paste backup JSON here…"
+          className="input mb-2 min-h-[100px] font-mono text-xs"
+        />
+        <button
+          disabled={importPending || !importText.trim()}
+          onClick={() =>
+            startImport(async () => {
+              try {
+                const res = await importLegacyBackup(importText);
+                setImportResult(
+                  `Imported: ${res.itemsAdded} new item(s), ${res.itemsUpdated} price/cost update(s), ${res.txnsImported} transaction(s).`
+                );
+                setImportText("");
+              } catch (e) {
+                setImportResult(e instanceof Error ? e.message : "Import failed.");
+              }
+            })
+          }
+          className="rounded-lg bg-rose-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+        >
+          Import
+        </button>
+        {importResult && <p className="mt-2 text-xs font-semibold text-stone-600">{importResult}</p>}
+      </div>
     </div>
   );
 }
