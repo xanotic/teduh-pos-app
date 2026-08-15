@@ -40,11 +40,21 @@ export function Nav({ businessName }: { businessName: string }) {
         })}
       </nav>
 
-      <form action={logOut}>
-        <button type="submit" className="text-sm font-semibold text-ink-muted hover:text-ink">
-          Log out
-        </button>
-      </form>
+      <div className="flex items-center gap-3">
+        <Link
+          href="/account"
+          className={`text-sm font-semibold ${
+            pathname.startsWith("/account") ? "text-accent" : "text-ink-muted hover:text-ink"
+          }`}
+        >
+          Account
+        </Link>
+        <form action={logOut}>
+          <button type="submit" className="text-sm font-semibold text-ink-muted hover:text-ink">
+            Log out
+          </button>
+        </form>
+      </div>
     </header>
   );
 }
