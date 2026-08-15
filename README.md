@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Teduh POS
 
-## Getting Started
+A multi-tenant point-of-sale, analytics, and inventory app for supplier-based dessert cafes — any cafe can sign up and get their own private workspace. Built with Next.js (App Router), Tailwind CSS, and Supabase (Postgres + Auth, tenant isolation via Row Level Security).
 
-First, run the development server:
+## Features
+
+- **Sell** — tap-to-order catalog, cart, Cash / QR Pay checkout
+- **Giveaway** — free items for a customer, priced at full sell price so the till still balances (the owner "buys" it), tracked as its own payment method
+- **History** — today's transactions, editable (adjust quantities/payment method) or voidable
+- **Analytics** — revenue, orders, avg order, est. profit, revenue-by-day and busiest-hours charts, top items, category breakdown, payment split, items not selling — filterable by Today / 7 Days / 30 Days / All Time
+- **Shelf Life** — expiry tracking per batch, color-coded by days remaining
+- **Menu** — add/edit/remove items, price and (optional) cost per item
+
+## One-time setup
+
+### 1. Create a Supabase project (free tier)
+
+1. Sign up at [supabase.com](https://supabase.com) and create a new project
+2. In the SQL Editor, run the migration in `supabase/migrations/0001_init.sql`
+3. In **Authentication → Providers**, email/password is enabled by default. For fastest local testing, you can disable "Confirm email" under **Authentication → Sign In / Providers → Email** — otherwise new signups need to click a confirmation email before their first login
+4. Copy your **Project URL** and **anon public key** from **Settings → API**
+
+### 2. Configure environment variables
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Run locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Visit `http://localhost:3000`, sign up, and start using it.
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Deploy (Vercel, free tier)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push this repo to GitHub
+2. Import it at [vercel.com/new](https://vercel.com/new)
+3. Add the same two environment variables in the Vercel project settings
+4. Deploy — Vercel auto-deploys on every push to `main` from then on
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Notes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Every business's data is isolated by Postgres Row Level Security (see the migration) — verified by signing up as two different businesses locally and confirming neither can see the other's menu or sales.
+- No billing is wired up — every signed-up business gets full access for free.
+- This is a fresh app with no data migration from the original single-file `teduh-pos.html` version — new signups start with an empty menu.
