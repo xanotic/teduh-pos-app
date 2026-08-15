@@ -23,9 +23,14 @@ export async function addMenuItem(input: {
   revalidatePath("/giveaway");
 }
 
-export async function updateMenuItem(id: string, patch: { price?: number; cost?: number | null }) {
+export async function updateMenuItem(
+  id: string,
+  patch: { name?: string; category?: string; price?: number; cost?: number | null }
+) {
   const { supabase } = await getBusinessContext();
-  const { error } = await supabase.from("menu_items").update(patch).eq("id", id);
+  const cleanPatch = { ...patch };
+  if (cleanPatch.category) cleanPatch.category = cleanPatch.category.toUpperCase();
+  const { error } = await supabase.from("menu_items").update(cleanPatch).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
   revalidatePath("/sell");

@@ -170,15 +170,36 @@ function MenuRow({
   const [, startTransition] = useTransition();
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2">
-      <span className="flex-1 truncate text-sm font-semibold text-ink">{item.name}</span>
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
+      <input
+        type="text"
+        defaultValue={item.name}
+        placeholder="Name"
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if (v && v !== item.name) startTransition(() => updateMenuItem(item.id, { name: v }));
+          else e.target.value = item.name;
+        }}
+        className="min-w-[120px] flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm font-semibold text-ink"
+      />
+      <input
+        type="text"
+        defaultValue={item.category}
+        placeholder="Category"
+        onBlur={(e) => {
+          const v = e.target.value.trim();
+          if (v && v.toUpperCase() !== item.category) startTransition(() => updateMenuItem(item.id, { category: v }));
+          else e.target.value = item.category;
+        }}
+        className="w-24 flex-none rounded-md border border-border bg-bg px-2 py-1 text-xs uppercase text-ink-muted"
+      />
       <input
         type="number"
         step="0.1"
         defaultValue={item.price || ""}
         placeholder="Price"
         onBlur={(e) => startTransition(() => updateMenuItem(item.id, { price: parseFloat(e.target.value) || 0 }))}
-        className="w-20 rounded-md border border-border px-2 py-1 text-right text-sm"
+        className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
       />
       <input
         type="number"
@@ -190,11 +211,11 @@ function MenuRow({
             updateMenuItem(item.id, { cost: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })
           )
         }
-        className="w-20 rounded-md border border-border px-2 py-1 text-right text-sm"
+        className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
       />
       <button
         onClick={onDeleteClick}
-        className={`rounded-md px-2 py-1 text-xs font-bold ${
+        className={`flex-none rounded-md px-2 py-1 text-xs font-bold ${
           confirming ? "bg-danger text-white" : "bg-surface-alt text-danger"
         }`}
       >
