@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { Transaction } from "@/lib/types";
+import type { MenuItem, Transaction } from "@/lib/types";
 import { HistoryClient } from "./HistoryClient";
 
 export const dynamic = "force-dynamic";
@@ -33,17 +33,21 @@ export default async function HistoryPage({
   const dayStart = new Date(dateStr + "T00:00:00+08:00");
   const dayEnd = new Date(dayStart.getTime() + 86400000);
 
-  const { data } = await supabase
-    .from("transactions")
-    .select("*, transaction_items(*)")
-    .eq("business_id", businessId)
-    .gte("ts", dayStart.toISOString())
-    .lt("ts", dayEnd.toISOString())
-    .order("ts", { ascending: false });
+  const [{ data }, { data: menu }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("*, transaction_items(*)")
+      .eq("business_id", businessId)
+      .gte("ts", dayStart.toISOString())
+      .lt("ts", dayEnd.toISOString())
+      .order("ts", { ascending: false }),
+    supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+  ]);
 
   return (
     <HistoryClient
       transactions={(data ?? []) as Transaction[]}
+      menuItems={(menu ?? []) as MenuItem[]}
       dateStr={dateStr}
       isToday={dateStr === today}
       isYesterday={dateStr === shiftDate(today, -1)}

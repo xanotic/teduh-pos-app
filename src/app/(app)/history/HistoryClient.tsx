@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import type { PaymentMethod, Transaction, TransactionItem } from "@/lib/types";
+import type { MenuItem, PaymentMethod, Transaction, TransactionItem } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { updateTransaction, voidTransaction } from "@/lib/actions/sales";
 
@@ -11,6 +11,7 @@ const PAY_METHODS: PaymentMethod[] = ["Cash", "QR Pay", "Giveaway"];
 
 export function HistoryClient({
   transactions,
+  menuItems,
   dateStr,
   isToday,
   isYesterday,
@@ -18,6 +19,7 @@ export function HistoryClient({
   nextDate,
 }: {
   transactions: Transaction[];
+  menuItems: MenuItem[];
   dateStr: string;
   isToday: boolean;
   isYesterday: boolean;
@@ -82,7 +84,7 @@ export function HistoryClient({
 
       <div className="flex flex-col gap-2">
         {transactions.map((t) => (
-          <TxnCard key={t.id} txn={t} />
+          <TxnCard key={t.id} txn={t} menuItems={menuItems} />
         ))}
         {transactions.length === 0 && (
           <p className="text-sm text-ink-muted">
@@ -94,12 +96,37 @@ export function HistoryClient({
   );
 }
 
-function TxnCard({ txn }: { txn: Transaction }) {
+function TxnCard({ txn, menuItems }: { txn: Transaction; menuItems: MenuItem[] }) {
   const [editing, setEditing] = useState(false);
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [pending, startTransition] = useTransition();
   const [draftItems, setDraftItems] = useState<TransactionItem[]>(txn.transaction_items);
   const [draftPayment, setDraftPayment] = useState<PaymentMethod>(txn.payment_method);
+  const [addSelect, setAddSelect] = useState("");
+
+  function addItem() {
+    const mi = menuItems.find((m) => m.id === addSelect);
+    if (!mi) return;
+    setDraftItems((prev) => {
+      const existing = prev.find((l) => l.name === mi.name);
+      if (existing) {
+        return prev.map((l) => (l.name === mi.name ? { ...l, qty: l.qty + 1 } : l));
+      }
+      return [
+        ...prev,
+        {
+          id: `new-${mi.id}-${Date.now()}`,
+          transaction_id: txn.id,
+          name: mi.name,
+          category: mi.category,
+          price: mi.price,
+          cost: mi.cost,
+          qty: 1,
+        },
+      ];
+    });
+    setAddSelect("");
+  }
 
   const time = new Date(txn.ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   const draftTotal = draftItems.reduce((s, l) => s + l.price * l.qty, 0);
@@ -148,6 +175,30 @@ function TxnCard({ txn }: { txn: Transaction }) {
           {draftItems.length === 0 && (
             <p className="text-xs text-ink-muted">No items left — Cancel and Void instead.</p>
           )}
+        </div>
+
+        <div className="mt-3 flex gap-2">
+          <select
+            value={addSelect}
+            onChange={(e) => setAddSelect(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-ink"
+          >
+            <option value="">Add an item…</option>
+            {menuItems
+              .filter((m) => m.price > 0)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} — {fmt(m.price)}
+                </option>
+              ))}
+          </select>
+          <button
+            onClick={addItem}
+            disabled={!addSelect}
+            className="flex-none rounded-lg border border-accent px-3 py-2 text-sm font-bold text-accent disabled:opacity-40"
+          >
+            + Add
+          </button>
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2">
