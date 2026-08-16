@@ -191,81 +191,103 @@ function MenuRow({
   onDeleteClick: () => void;
 }) {
   const [, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function save(patch: Parameters<typeof updateMenuItem>[1], revert: () => void) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateMenuItem(item.id, patch);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Save failed — try again.");
+        revert();
+      }
+    });
+  }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-      <input
-        type="text"
-        defaultValue={item.name}
-        placeholder="Name"
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v && v !== item.name) startTransition(() => updateMenuItem(item.id, { name: v }));
-          else e.target.value = item.name;
-        }}
-        className="min-w-[120px] flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm font-semibold text-ink"
-      />
-      <input
-        type="text"
-        defaultValue={item.category}
-        placeholder="Category"
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v && v.toUpperCase() !== item.category) startTransition(() => updateMenuItem(item.id, { category: v }));
-          else e.target.value = item.category;
-        }}
-        className="w-24 flex-none rounded-md border border-border bg-bg px-2 py-1 text-xs uppercase text-ink-muted"
-      />
-      <input
-        type="number"
-        step="0.1"
-        defaultValue={item.price || ""}
-        placeholder="Price"
-        onBlur={(e) => startTransition(() => updateMenuItem(item.id, { price: parseFloat(e.target.value) || 0 }))}
-        className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
-      />
-      <input
-        type="number"
-        step="0.1"
-        defaultValue={item.cost ?? ""}
-        placeholder="Cost"
-        onBlur={(e) =>
-          startTransition(() =>
-            updateMenuItem(item.id, { cost: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })
-          )
-        }
-        className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
-          item.cost == null ? "border-gold" : "border-border"
-        }`}
-        title={item.cost == null ? "No cost set — Est. Profit on Analytics excludes this item's sales" : undefined}
-      />
-      <input
-        type="number"
-        step="1"
-        min="0"
-        defaultValue={item.stock ?? ""}
-        placeholder="Stock"
-        onBlur={(e) =>
-          startTransition(() =>
-            updateMenuItem(item.id, { stock: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 })
-          )
-        }
-        className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
-          item.stock === 0
-            ? "border-danger text-danger"
-            : item.stock != null && item.stock <= 3
-              ? "border-gold text-gold"
-              : "border-border"
-        }`}
-      />
-      <button
-        onClick={onDeleteClick}
-        className={`flex-none rounded-md px-2 py-1 text-xs font-bold ${
-          confirming ? "bg-danger text-white" : "bg-surface-alt text-danger"
-        }`}
-      >
-        {confirming ? "✔" : "✕"}
-      </button>
+    <div className="rounded-xl border border-border bg-surface px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          defaultValue={item.name}
+          placeholder="Name"
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            const el = e.target;
+            if (v && v !== item.name) save({ name: v }, () => (el.value = item.name));
+            else el.value = item.name;
+          }}
+          className="min-w-[120px] flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm font-semibold text-ink"
+        />
+        <input
+          type="text"
+          defaultValue={item.category}
+          placeholder="Category"
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            const el = e.target;
+            if (v && v.toUpperCase() !== item.category) save({ category: v }, () => (el.value = item.category));
+            else el.value = item.category;
+          }}
+          className="w-24 flex-none rounded-md border border-border bg-bg px-2 py-1 text-xs uppercase text-ink-muted"
+        />
+        <input
+          type="number"
+          step="0.1"
+          defaultValue={item.price || ""}
+          placeholder="Price"
+          onBlur={(e) => {
+            const el = e.target;
+            save({ price: parseFloat(el.value) || 0 }, () => (el.value = String(item.price || "")));
+          }}
+          className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
+        />
+        <input
+          type="number"
+          step="0.1"
+          defaultValue={item.cost ?? ""}
+          placeholder="Cost"
+          onBlur={(e) => {
+            const el = e.target;
+            save({ cost: el.value === "" ? null : parseFloat(el.value) || 0 }, () => (el.value = item.cost != null ? String(item.cost) : ""));
+          }}
+          className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
+            item.cost == null ? "border-gold" : "border-border"
+          }`}
+          title={item.cost == null ? "No cost set — Est. Profit on Analytics excludes this item's sales" : undefined}
+        />
+        <input
+          type="number"
+          step="1"
+          min="0"
+          defaultValue={item.stock ?? ""}
+          placeholder="Stock"
+          onBlur={(e) => {
+            const el = e.target;
+            save(
+              { stock: el.value === "" ? null : parseInt(el.value, 10) || 0 },
+              () => (el.value = item.stock != null ? String(item.stock) : "")
+            );
+          }}
+          className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
+            item.stock === 0
+              ? "border-danger text-danger"
+              : item.stock != null && item.stock <= 3
+                ? "border-gold text-gold"
+                : "border-border"
+          }`}
+        />
+        <button
+          onClick={onDeleteClick}
+          className={`flex-none rounded-md px-2 py-1 text-xs font-bold ${
+            confirming ? "bg-danger text-white" : "bg-surface-alt text-danger"
+          }`}
+        >
+          {confirming ? "✔" : "✕"}
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs font-semibold text-danger">{error}</p>}
     </div>
   );
 }
