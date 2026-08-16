@@ -29,11 +29,19 @@ export async function updateMenuItem(
   id: string,
   patch: { name?: string; category?: string; price?: number; cost?: number | null; stock?: number | null }
 ) {
-  const { supabase } = await getBusinessContext();
+  const { supabase, businessId } = await getBusinessContext();
   const cleanPatch = { ...patch };
   if (cleanPatch.category) cleanPatch.category = cleanPatch.category.toUpperCase();
-  const { error } = await supabase.from("menu_items").update(cleanPatch).eq("id", id);
+  const { data, error } = await supabase
+    .from("menu_items")
+    .update(cleanPatch)
+    .eq("id", id)
+    .eq("business_id", businessId)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    throw new Error("Update didn't apply — this item may not belong to your account. Refresh and try again.");
+  }
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/giveaway");
