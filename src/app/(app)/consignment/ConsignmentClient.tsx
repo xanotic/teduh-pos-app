@@ -42,7 +42,12 @@ export function ConsignmentClient({
 
   function handleNameChange(idx: number, name: string) {
     const match = menuItems.find((m) => m.name.toLowerCase() === name.trim().toLowerCase());
-    updateItem(idx, { name, cost: match?.cost != null ? String(match.cost) : items[idx].cost });
+    updateItem(idx, {
+      name,
+      cost: match?.cost != null ? String(match.cost) : items[idx].cost,
+      remaining: match?.stock != null ? String(match.stock) : items[idx].remaining,
+      soldOut: match?.stock === 0 ? true : items[idx].soldOut,
+    });
   }
 
   function addRow() {
@@ -96,7 +101,8 @@ export function ConsignmentClient({
       <h1 className="text-xl font-bold text-ink">Consignment Payout</h1>
       <p className="mb-5 text-sm text-ink-muted">
         Log tonight&apos;s baki (remaining stock) per supplier item — it works out how many sold and
-        how much you owe, so you&apos;re not doing it by hand.
+        how much you owe, so you&apos;re not doing it by hand. Pick an item name and Remaining
+        auto-fills from its current Stock on the Menu tab — correct it if your physical count differs.
       </p>
 
       <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
@@ -143,7 +149,7 @@ export function ConsignmentClient({
                 value={it.soldOut ? "" : it.remaining}
                 disabled={it.soldOut}
                 onChange={(e) => updateItem(idx, { remaining: e.target.value })}
-                placeholder={it.soldOut ? "Sold out" : "Remaining"}
+                placeholder={it.soldOut ? "Sold out" : "Remaining (auto from Stock)"}
                 className="input disabled:opacity-50"
               />
               <input
