@@ -7,8 +7,17 @@ import { BarChart } from "@/components/BarChart";
 import { RankList } from "@/components/RankList";
 import { TopItemsPanel } from "@/components/TopItemsPanel";
 import { ChipList } from "@/components/ChipList";
+import { DatePicker } from "./DatePicker";
 
 export const dynamic = "force-dynamic";
+
+// Malaysia is UTC+8 with no DST — computed explicitly since Vercel functions
+// run in UTC regardless of the configured region (same approach as History).
+const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function todayInMalaysia(): string {
+  return new Date(Date.now() + MY_OFFSET_MS).toISOString().slice(0, 10);
+}
 
 const RANGES: { key: RangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -20,20 +29,29 @@ const RANGES: { key: RangeKey; label: string }[] = [
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; date?: string }>;
 }) {
   const { supabase, businessId } = await getBusinessContext();
-  const { range: rangeParam } = await searchParams;
+  const { range: rangeParam, date: dateParam } = await searchParams;
+
+  const customDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
   const range: RangeKey = (["today", "7d", "30d", "all"] as const).includes(rangeParam as RangeKey)
     ? (rangeParam as RangeKey)
     : "today";
 
-  const start = rangeStart(range);
   let query = supabase
     .from("transactions")
     .select("*, transaction_items(*)")
     .eq("business_id", businessId);
-  if (start) query = query.gte("ts", start.toISOString());
+
+  if (customDate) {
+    const dayStart = new Date(customDate + "T00:00:00+08:00");
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    query = query.gte("ts", dayStart.toISOString()).lt("ts", dayEnd.toISOString());
+  } else {
+    const start = rangeStart(range);
+    if (start) query = query.gte("ts", start.toISOString());
+  }
 
   const [{ data: txns }, { data: menu }] = await Promise.all([
     query,
@@ -64,20 +82,27 @@ export default async function AnalyticsPage({
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-ink">Analytics</h1>
-          <p className="text-sm text-ink-muted">Pick a range to filter everything below.</p>
+          <p className="text-sm text-ink-muted">
+            {customDate
+              ? `Showing ${new Date(customDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.`
+              : "Pick a range to filter everything below."}
+          </p>
         </div>
-        <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
-          {RANGES.map((r) => (
-            <Link
-              key={r.key}
-              href={`/analytics?range=${r.key}`}
-              className={`rounded-lg px-3.5 py-2 text-sm font-bold ${
-                range === r.key ? "bg-accent text-white" : "text-ink-muted"
-              }`}
-            >
-              {r.label}
-            </Link>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
+            {RANGES.map((r) => (
+              <Link
+                key={r.key}
+                href={`/analytics?range=${r.key}`}
+                className={`rounded-lg px-3.5 py-2 text-sm font-bold ${
+                  !customDate && range === r.key ? "bg-accent text-white" : "text-ink-muted"
+                }`}
+              >
+                {r.label}
+              </Link>
+            ))}
+          </div>
+          <DatePicker value={customDate ?? todayInMalaysia()} active={!!customDate} />
         </div>
       </div>
 
@@ -90,7 +115,7 @@ export default async function AnalyticsPage({
         ))}
       </div>
 
-      {range !== "today" && (
+      {!customDate && range !== "today" && (
         <div className="mb-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-bold text-ink">Revenue by Day</h3>
           <BarChart data={stats.byDay} prefix="RM" />
