@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import type { MenuItem, PaymentMethod, Transaction, TransactionItem } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { updateTransaction, voidTransaction } from "@/lib/actions/sales";
+import { setActualClosing, setOpeningBalance } from "./tillActions";
 
 const PAY_METHODS: PaymentMethod[] = ["Cash", "QR Pay", "Giveaway"];
 
@@ -17,6 +18,10 @@ export function HistoryClient({
   isYesterday,
   prevDate,
   nextDate,
+  cashTotal,
+  openingBalance,
+  openingBalanceIsSaved,
+  actualClosing,
 }: {
   transactions: Transaction[];
   menuItems: MenuItem[];
@@ -25,6 +30,10 @@ export function HistoryClient({
   isYesterday: boolean;
   prevDate: string;
   nextDate: string | null;
+  cashTotal: number;
+  openingBalance: number;
+  openingBalanceIsSaved: boolean;
+  actualClosing: number | null;
 }) {
   const total = transactions.reduce((s, t) => s + Number(t.total), 0);
   const router = useRouter();
@@ -82,6 +91,14 @@ export function HistoryClient({
         </div>
       </div>
 
+      <TillCard
+        dateStr={dateStr}
+        cashTotal={cashTotal}
+        openingBalance={openingBalance}
+        openingBalanceIsSaved={openingBalanceIsSaved}
+        actualClosing={actualClosing}
+      />
+
       <div className="flex flex-col gap-2">
         {transactions.map((t) => (
           <TxnCard key={t.id} txn={t} menuItems={menuItems} />
@@ -92,6 +109,110 @@ export function HistoryClient({
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function TillCard({
+  dateStr,
+  cashTotal,
+  openingBalance,
+  openingBalanceIsSaved,
+  actualClosing,
+}: {
+  dateStr: string;
+  cashTotal: number;
+  openingBalance: number;
+  openingBalanceIsSaved: boolean;
+  actualClosing: number | null;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [openingInput, setOpeningInput] = useState(String(openingBalance));
+  const [openingEditing, setOpeningEditing] = useState(false);
+  const [actualInput, setActualInput] = useState(actualClosing != null ? String(actualClosing) : "");
+  const [actualEditing, setActualEditing] = useState(false);
+
+  const opening = parseFloat(openingInput) || 0;
+  const expectedClosing = opening + cashTotal;
+  const actual = actualInput === "" ? null : parseFloat(actualInput) || 0;
+  const variance = actual != null ? actual - expectedClosing : null;
+
+  return (
+    <div className="mb-5 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-ink">Cash Till</h2>
+        {!openingBalanceIsSaved && <span className="text-[11px] text-ink-muted">Carried from previous day — tap to confirm</span>}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">Opening</div>
+          {openingEditing ? (
+            <input
+              type="number"
+              step="0.1"
+              autoFocus
+              value={openingInput}
+              onChange={(e) => setOpeningInput(e.target.value)}
+              onBlur={() => {
+                setOpeningEditing(false);
+                startTransition(() => setOpeningBalance(dateStr, parseFloat(openingInput) || 0));
+              }}
+              className="input mt-1 text-center text-sm font-bold"
+            />
+          ) : (
+            <button
+              onClick={() => setOpeningEditing(true)}
+              className="mt-1 block w-full rounded-lg border border-border bg-bg py-1.5 text-sm font-bold text-ink"
+            >
+              {fmt(opening)}
+            </button>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">Cash Sales</div>
+          <div className="mt-1 rounded-lg py-1.5 text-sm font-bold text-success">{fmt(cashTotal)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">Expected</div>
+          <div className="mt-1 rounded-lg py-1.5 text-sm font-bold text-ink">{fmt(expectedClosing)}</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="text-xs text-ink-muted">Actual counted at close-out</div>
+        {actualEditing ? (
+          <input
+            type="number"
+            step="0.1"
+            autoFocus
+            value={actualInput}
+            onChange={(e) => setActualInput(e.target.value)}
+            onBlur={() => {
+              setActualEditing(false);
+              if (actualInput !== "") startTransition(() => setActualClosing(dateStr, parseFloat(actualInput) || 0));
+            }}
+            className="input w-28 text-right text-sm font-bold"
+          />
+        ) : (
+          <button
+            onClick={() => setActualEditing(true)}
+            className="rounded-lg border border-border bg-bg px-3 py-1.5 text-sm font-bold text-ink"
+          >
+            {actual != null ? fmt(actual) : "Enter count"}
+          </button>
+        )}
+      </div>
+
+      {variance != null && Math.abs(variance) > 0.01 && (
+        <p className={`mt-2 text-xs font-bold ${variance > 0 ? "text-success" : "text-danger"}`}>
+          {variance > 0 ? `Over by ${fmt(variance)}` : `Short by ${fmt(Math.abs(variance))}`}
+        </p>
+      )}
+      {variance != null && Math.abs(variance) <= 0.01 && (
+        <p className="mt-2 text-xs font-bold text-success">Till balances exactly.</p>
+      )}
+      {pending && <p className="mt-1 text-[11px] text-ink-muted">Saving…</p>}
     </div>
   );
 }

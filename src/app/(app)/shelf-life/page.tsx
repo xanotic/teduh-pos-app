@@ -15,7 +15,7 @@ export default async function ShelfLifePage() {
   return (
     <ShelfLifeClient
       entries={(entries ?? []) as ShelfLifeEntry[]}
-      menuNames={((menu ?? []) as MenuItem[]).map((m) => m.name)}
+      menuItems={(menu ?? []) as MenuItem[]}
     />
   );
 }

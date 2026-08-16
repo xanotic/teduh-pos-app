@@ -30,13 +30,27 @@ export interface Transaction {
   transaction_items: TransactionItem[];
 }
 
+export type PaymentType = "consignment" | "upfront";
+
 export interface ShelfLifeEntry {
   id: string;
   business_id: string;
   item: string;
   expires_at: string;
   notes: string | null;
+  payment_type: PaymentType;
+  qty: number;
+  cost: number | null;
   created_at: string;
+}
+
+export interface DailyBalance {
+  id: string;
+  business_id: string;
+  date: string;
+  opening_balance: number;
+  actual_closing: number | null;
+  updated_at: string;
 }
 
 export interface CartLine {

@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { MenuItem, Transaction } from "@/lib/types";
+import type { DailyBalance, MenuItem, Transaction } from "@/lib/types";
 import { HistoryClient } from "./HistoryClient";
 
 export const dynamic = "force-dynamic";
@@ -33,26 +33,56 @@ export default async function HistoryPage({
   const dayStart = new Date(dateStr + "T00:00:00+08:00");
   const dayEnd = new Date(dayStart.getTime() + 86400000);
 
-  const [{ data }, { data: menu }] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("*, transaction_items(*)")
-      .eq("business_id", businessId)
-      .gte("ts", dayStart.toISOString())
-      .lt("ts", dayEnd.toISOString())
-      .order("ts", { ascending: false }),
-    supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
-  ]);
+  const prevDateStr = shiftDate(dateStr, -1);
+  const prevDayStart = new Date(prevDateStr + "T00:00:00+08:00");
+  const prevDayEnd = new Date(prevDayStart.getTime() + 86400000);
+
+  const [{ data }, { data: menu }, { data: balanceRow }, { data: prevBalanceRow }, { data: prevCashTxns }] =
+    await Promise.all([
+      supabase
+        .from("transactions")
+        .select("*, transaction_items(*)")
+        .eq("business_id", businessId)
+        .gte("ts", dayStart.toISOString())
+        .lt("ts", dayEnd.toISOString())
+        .order("ts", { ascending: false }),
+      supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+      supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", dateStr).maybeSingle(),
+      supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", prevDateStr).maybeSingle(),
+      supabase
+        .from("transactions")
+        .select("total")
+        .eq("business_id", businessId)
+        .eq("payment_method", "Cash")
+        .gte("ts", prevDayStart.toISOString())
+        .lt("ts", prevDayEnd.toISOString()),
+    ]);
+
+  const transactions = (data ?? []) as Transaction[];
+  const cashTotal = transactions
+    .filter((t) => t.payment_method === "Cash")
+    .reduce((s, t) => s + Number(t.total), 0);
+
+  const prevBalance = prevBalanceRow as DailyBalance | null;
+  const prevCashTotal = (prevCashTxns ?? []).reduce((s, t) => s + Number(t.total), 0);
+  const prevExpectedClosing = (prevBalance?.opening_balance ?? 0) + prevCashTotal;
+  const carriedOpeningBalance = prevBalance?.actual_closing ?? prevExpectedClosing;
+
+  const balance = balanceRow as DailyBalance | null;
 
   return (
     <HistoryClient
-      transactions={(data ?? []) as Transaction[]}
+      transactions={transactions}
       menuItems={(menu ?? []) as MenuItem[]}
       dateStr={dateStr}
       isToday={dateStr === today}
       isYesterday={dateStr === shiftDate(today, -1)}
       prevDate={shiftDate(dateStr, -1)}
       nextDate={dateStr === today ? null : shiftDate(dateStr, 1)}
+      cashTotal={cashTotal}
+      openingBalance={balance?.opening_balance ?? carriedOpeningBalance}
+      openingBalanceIsSaved={balance != null}
+      actualClosing={balance?.actual_closing ?? null}
     />
   );
 }
