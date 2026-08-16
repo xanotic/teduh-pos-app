@@ -37,10 +37,21 @@ export async function updateMenuItem(
     .update(cleanPatch)
     .eq("id", id)
     .eq("business_id", businessId)
-    .select("id");
+    .select("id, name, category, price, cost, stock")
+    .single();
   if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
+  if (!data) {
     throw new Error("Update didn't apply — this item may not belong to your account. Refresh and try again.");
+  }
+  // Postgres numeric columns (price, cost) often come back as strings to
+  // preserve precision, so compare numerically rather than by strict equality.
+  const normalize = (v: unknown) => (typeof v === "string" && v !== "" && !isNaN(Number(v)) ? Number(v) : v);
+  for (const key of Object.keys(cleanPatch) as (keyof typeof cleanPatch)[]) {
+    if (normalize(data[key]) !== normalize(cleanPatch[key])) {
+      throw new Error(
+        `Save mismatch on "${key}": sent ${JSON.stringify(cleanPatch[key])}, database has ${JSON.stringify(data[key])}. Refresh and report this.`
+      );
+    }
   }
   revalidatePath("/menu");
   revalidatePath("/sell");
