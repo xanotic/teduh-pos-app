@@ -35,20 +35,39 @@ export async function finalizeSale(paymentMethod: PaymentMethod, lines: CartLine
   );
   if (itemsError) throw new Error(itemsError.message);
 
+  await Promise.all(lines.map((l) => supabase.rpc("adjust_menu_stock", { p_name: l.name, p_delta: -l.qty })));
+
   revalidatePath("/sell");
   revalidatePath("/giveaway");
   revalidatePath("/history");
   revalidatePath("/analytics");
+  revalidatePath("/menu");
 }
 
 export async function voidTransaction(id: string) {
   const { supabase } = await getBusinessContext();
+
+  const { data: txn } = await supabase
+    .from("transactions")
+    .select("transaction_items(name, qty)")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (txn) {
+    await Promise.all(
+      (txn.transaction_items as { name: string; qty: number }[]).map((l) =>
+        supabase.rpc("adjust_menu_stock", { p_name: l.name, p_delta: l.qty })
+      )
+    );
+  }
 
   revalidatePath("/history");
   revalidatePath("/giveaway");
   revalidatePath("/analytics");
+  revalidatePath("/menu");
 }
 
 export async function updateTransaction(
@@ -60,6 +79,11 @@ export async function updateTransaction(
 
   const { supabase } = await getBusinessContext();
   const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
+
+  const { data: existing } = await supabase
+    .from("transaction_items")
+    .select("name, qty")
+    .eq("transaction_id", id);
 
   const { error: updateError } = await supabase
     .from("transactions")
@@ -75,6 +99,14 @@ export async function updateTransaction(
   );
   if (insertError) throw new Error(insertError.message);
 
+  // Restore stock for the old line-up, then deduct for the new one — net effect
+  // is only the difference actually gets applied.
+  await Promise.all([
+    ...(existing ?? []).map((l) => supabase.rpc("adjust_menu_stock", { p_name: l.name, p_delta: l.qty })),
+    ...lines.map((l) => supabase.rpc("adjust_menu_stock", { p_name: l.name, p_delta: -l.qty })),
+  ]);
+
   revalidatePath("/history");
   revalidatePath("/analytics");
+  revalidatePath("/menu");
 }
