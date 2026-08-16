@@ -11,6 +11,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
+  const [stock, setStock] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [importPending, startImport] = useTransition();
@@ -30,11 +31,13 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
         category: category.trim(),
         price: parseFloat(price) || 0,
         cost: cost === "" ? null : parseFloat(cost) || 0,
+        stock: stock === "" ? null : parseInt(stock, 10) || 0,
       });
       setName("");
       setCategory("");
       setPrice("");
       setCost("");
+      setStock("");
     });
   }
 
@@ -47,7 +50,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
 
       <form
         onSubmit={handleAdd}
-        className="mb-6 grid grid-cols-2 gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-5 sm:items-end"
+        className="mb-6 grid grid-cols-2 gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:grid-cols-6 sm:items-end"
       >
         <Field label="Item name" className="col-span-2 sm:col-span-2">
           <input
@@ -83,9 +86,20 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
             className="input"
           />
         </Field>
+        <Field label="Stock">
+          <input
+            type="number"
+            step="1"
+            min="0"
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            placeholder="—"
+            className="input"
+          />
+        </Field>
         <button
           disabled={pending}
-          className="col-span-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-strong disabled:opacity-50 sm:col-span-5"
+          className="col-span-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-strong disabled:opacity-50 sm:col-span-6"
         >
           Add item
         </button>
@@ -212,6 +226,25 @@ function MenuRow({
           )
         }
         className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
+      />
+      <input
+        type="number"
+        step="1"
+        min="0"
+        defaultValue={item.stock ?? ""}
+        placeholder="Stock"
+        onBlur={(e) =>
+          startTransition(() =>
+            updateMenuItem(item.id, { stock: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 })
+          )
+        }
+        className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
+          item.stock === 0
+            ? "border-danger text-danger"
+            : item.stock != null && item.stock <= 3
+              ? "border-gold text-gold"
+              : "border-border"
+        }`}
       />
       <button
         onClick={onDeleteClick}

@@ -107,8 +107,23 @@ export function CatalogCart({ items, mode }: { items: MenuItem[]; mode: "sell" |
               onClick={() => addToCart(it)}
               className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-3.5 text-left shadow-sm active:scale-95"
             >
-              <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
-                {it.category}
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
+                  {it.category}
+                </span>
+                {it.stock != null && (
+                  <span
+                    className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      it.stock === 0
+                        ? "bg-danger-soft text-danger"
+                        : it.stock <= 3
+                          ? "bg-surface-alt text-gold"
+                          : "bg-surface-alt text-ink-muted"
+                    }`}
+                  >
+                    {it.stock === 0 ? "Out" : `${it.stock} left`}
+                  </span>
+                )}
               </span>
               <span className="text-sm font-semibold text-ink">{it.name}</span>
               <span className={`mt-auto text-sm font-bold ${it.price > 0 ? "text-accent" : "text-ink-muted"}`}>

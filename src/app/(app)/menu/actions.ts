@@ -8,6 +8,7 @@ export async function addMenuItem(input: {
   category: string;
   price: number;
   cost: number | null;
+  stock: number | null;
 }) {
   const { supabase, businessId } = await getBusinessContext();
   const { error } = await supabase.from("menu_items").insert({
@@ -16,6 +17,7 @@ export async function addMenuItem(input: {
     category: input.category.toUpperCase(),
     price: input.price,
     cost: input.cost,
+    stock: input.stock,
   });
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
@@ -25,7 +27,7 @@ export async function addMenuItem(input: {
 
 export async function updateMenuItem(
   id: string,
-  patch: { name?: string; category?: string; price?: number; cost?: number | null }
+  patch: { name?: string; category?: string; price?: number; cost?: number | null; stock?: number | null }
 ) {
   const { supabase } = await getBusinessContext();
   const cleanPatch = { ...patch };

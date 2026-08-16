@@ -7,6 +7,7 @@ export interface MenuItem {
   category: string;
   price: number;
   cost: number | null;
+  stock: number | null;
   created_at: string;
 }
 
