@@ -54,6 +54,25 @@ export interface DailyBalance {
   updated_at: string;
 }
 
+export interface ConsignmentSettlementItem {
+  id: string;
+  settlement_id: string;
+  name: string;
+  delivered_qty: number;
+  remaining_qty: number;
+  cost: number | null;
+}
+
+export interface ConsignmentSettlement {
+  id: string;
+  business_id: string;
+  settled_at: string;
+  paid: boolean;
+  paid_at: string | null;
+  created_at: string;
+  consignment_settlement_items: ConsignmentSettlementItem[];
+}
+
 export interface CartLine {
   itemId: string;
   name: string;
