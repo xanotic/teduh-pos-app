@@ -71,7 +71,11 @@ export default async function AnalyticsPage({
     { label: "Avg Order", value: fmt(stats.avgOrder) },
   ];
   if (stats.hasCost) {
-    kpis.push({ label: stats.costPartial ? "Est. Profit (partial)" : "Est. Profit", value: fmt(stats.profit) });
+    const coveragePct = stats.revenue > 0 ? Math.round((stats.trackedRevenue / stats.revenue) * 100) : 0;
+    kpis.push({
+      label: stats.costPartial ? `Est. Profit (${coveragePct}% of sales)` : "Est. Profit",
+      value: fmt(stats.profit),
+    });
   }
   if (stats.giveawayCost > 0) {
     kpis.push({ label: "Giveaways (cost)", value: fmt(stats.giveawayCost) });

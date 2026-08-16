@@ -22,6 +22,8 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
     return acc;
   }, {});
 
+  const missingCostCount = items.filter((it) => it.price > 0 && it.cost == null).length;
+
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !category.trim()) return;
@@ -47,6 +49,13 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
       <p className="mb-5 text-sm text-ink-muted">
         Add items, set prices, or remove things you no longer sell.
       </p>
+
+      {missingCostCount > 0 && (
+        <div className="mb-5 rounded-xl border border-gold bg-surface-alt px-3 py-2 text-xs font-semibold text-gold">
+          {missingCostCount} priced item{missingCostCount === 1 ? "" : "s"} {missingCostCount === 1 ? "has" : "have"} no
+          cost set (outlined below) — their sales are left out of Est. Profit on Analytics.
+        </div>
+      )}
 
       <form
         onSubmit={handleAdd}
@@ -225,7 +234,10 @@ function MenuRow({
             updateMenuItem(item.id, { cost: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })
           )
         }
-        className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
+        className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
+          item.cost == null ? "border-gold" : "border-border"
+        }`}
+        title={item.cost == null ? "No cost set — Est. Profit on Analytics excludes this item's sales" : undefined}
       />
       <input
         type="number"

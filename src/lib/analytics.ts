@@ -16,6 +16,7 @@ export interface AnalyticsStats {
   itemsSold: number;
   avgOrder: number;
   cost: number;
+  trackedRevenue: number;
   profit: number;
   hasCost: boolean;
   costPartial: boolean;
@@ -31,6 +32,7 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
   let revenue = 0;
   let itemsSold = 0;
   let cost = 0;
+  let trackedRevenue = 0;
   let anyCost = false;
   let anyMissingCost = false;
   let giveawayCost = 0;
@@ -59,6 +61,7 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
 
       if (typeof line.cost === "number") {
         cost += line.cost * line.qty;
+        trackedRevenue += lineRevenue;
         anyCost = true;
         if (pm === "Giveaway") giveawayCost += line.cost * line.qty;
       } else {
@@ -93,7 +96,8 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     itemsSold,
     avgOrder: transactions.length ? revenue / transactions.length : 0,
     cost,
-    profit: revenue - cost,
+    trackedRevenue,
+    profit: trackedRevenue - cost,
     hasCost: anyCost,
     costPartial: anyCost && anyMissingCost,
     giveawayCost,
