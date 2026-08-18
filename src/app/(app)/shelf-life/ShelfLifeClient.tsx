@@ -207,12 +207,19 @@ export function ShelfLifeClient({ entries, menuItems }: { entries: ShelfLifeEntr
           return (
             <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                {e.qty > 1 ? `${e.qty}× ` : ""}
+                {e.initial_qty != null && e.initial_qty > e.qty ? (
+                  <>
+                    <span className="font-extrabold text-accent">{e.qty}</span>
+                    <span className="text-ink-muted font-normal"> / {e.initial_qty} left · </span>
+                  </>
+                ) : (
+                  <span className="font-extrabold text-accent">{e.qty}× </span>
+                )}
                 {e.item}
               </span>
               {e.notes && <span className="basis-full text-xs text-ink-muted">{e.notes}</span>}
               <span className="text-xs text-ink-muted">
-                {new Date(e.expires_at + "T00:00:00").toLocaleDateString(undefined, {
+                {new Date(e.expires_at + "T00:00:00").toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",

@@ -31,7 +31,7 @@ export function VoidableList({
     if (!group) {
       group = {
         dayKey,
-        label: d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+        label: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
         items: [],
       };
       groups.push(group);
@@ -51,7 +51,7 @@ export function VoidableList({
             </div>
             <div className="flex flex-col gap-2">
               {g.items.map((t) => {
-                const time = new Date(t.ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                const time = new Date(t.ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
                 const itemsStr = t.transaction_items.map((i) => `${i.qty}× ${i.name}`).join(", ");
 
                 return (

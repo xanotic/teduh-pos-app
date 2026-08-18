@@ -41,6 +41,7 @@ export interface ShelfLifeEntry {
   notes: string | null;
   payment_type: PaymentType;
   qty: number;
+  initial_qty?: number | null;
   cost: number | null;
   created_at: string;
 }
@@ -81,3 +82,21 @@ export interface CartLine {
   cost: number | null;
   qty: number;
 }
+
+export type HappyHourDiscountType = "flat" | "percent";
+
+export interface HappyHourSettings {
+  id: string;
+  business_id: string;
+  is_enabled: boolean;
+  discount_type?: HappyHourDiscountType;
+  price?: number;
+  discount_percent?: number;
+  start_time: string;
+  end_time: string;
+  target_date?: string | null;
+  days?: string[];
+  force_active: boolean;
+  updated_at: string;
+}
+

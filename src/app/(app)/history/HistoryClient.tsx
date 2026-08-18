@@ -73,7 +73,7 @@ export function HistoryClient({
         />
       </div>
       <p className="mb-4 text-sm text-ink-muted">
-        {new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+        {new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
           weekday: "long",
           year: "numeric",
           month: "long",
@@ -249,7 +249,7 @@ function TxnCard({ txn, menuItems }: { txn: Transaction; menuItems: MenuItem[] }
     setAddSelect("");
   }
 
-  const time = new Date(txn.ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = new Date(txn.ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const draftTotal = draftItems.reduce((s, l) => s + l.price * l.qty, 0);
 
   if (editing) {

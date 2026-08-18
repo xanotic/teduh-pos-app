@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { MenuItem } from "@/lib/types";
+import type { HappyHourSettings, MenuItem } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { CatalogCart } from "@/components/CatalogCart";
 
@@ -8,16 +8,22 @@ export const dynamic = "force-dynamic";
 export default async function SellPage() {
   const { supabase, businessId } = await getBusinessContext();
 
-  const [{ data: items }, { data: todayTxns }] = await Promise.all([
+  const [{ data: items }, { data: todayTxns }, { data: happyHourData }] = await Promise.all([
     supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
     supabase
       .from("transactions")
       .select("total, ts")
       .eq("business_id", businessId)
       .gte("ts", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+    supabase
+      .from("happy_hour_settings")
+      .select("*")
+      .eq("business_id", businessId)
+      .maybeSingle(),
   ]);
 
   const todayTotal = (todayTxns ?? []).reduce((s, t) => s + Number(t.total), 0);
+  const happyHour = happyHourData as HappyHourSettings | null;
 
   return (
     <div>
@@ -28,7 +34,7 @@ export default async function SellPage() {
           <div className="text-lg font-extrabold text-success">{fmt(todayTotal)}</div>
         </div>
       </div>
-      <CatalogCart items={(items ?? []) as MenuItem[]} mode="sell" />
+      <CatalogCart items={(items ?? []) as MenuItem[]} mode="sell" happyHour={happyHour} />
     </div>
   );
 }

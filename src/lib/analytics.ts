@@ -1,10 +1,15 @@
-import type { Transaction } from "@/lib/types";
+import type { ConsignmentSettlement, ShelfLifeEntry, Transaction } from "@/lib/types";
 
 export type RangeKey = "today" | "7d" | "30d" | "all";
 
+const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
+
 export function rangeStart(range: RangeKey): Date | null {
-  const now = new Date();
-  if (range === "today") return new Date(now.setHours(0, 0, 0, 0));
+  const now = Date.now();
+  const myNow = new Date(now + MY_OFFSET_MS);
+  const todayDateStr = myNow.toISOString().slice(0, 10);
+
+  if (range === "today") return new Date(todayDateStr + "T00:00:00+08:00");
   if (range === "7d") return new Date(Date.now() - 7 * 86400000);
   if (range === "30d") return new Date(Date.now() - 30 * 86400000);
   return null;
@@ -28,6 +33,88 @@ export interface AnalyticsStats {
   byHour: { label: string; value: number }[];
 }
 
+export interface FoodFinancialStats {
+  upfrontPaidTotal: number;
+  upfrontRemainingStockValue: number;
+  upfrontExpiredLoss: number;
+  consignmentPaidTotal: number;
+  totalFoodCostSold: number;
+  breakEvenTarget: number;
+  breakEvenNeeded: number;
+  breakEvenPercent: number;
+  breakEvenAchieved: boolean;
+  netSurplus: number;
+}
+
+export function computeFoodFinancials(
+  revenue: number,
+  soldFoodCost: number,
+  shelfLifeEntries: ShelfLifeEntry[] = [],
+  settlements: ConsignmentSettlement[] = []
+): FoodFinancialStats {
+  const now = Date.now();
+  const myNow = new Date(now + MY_OFFSET_MS);
+  const todayDateStr = myNow.toISOString().slice(0, 10);
+
+  const upfrontEntries = shelfLifeEntries.filter((e) => e.payment_type === "upfront");
+
+  // Total cash paid upfront for batches
+  const upfrontPaidTotal = upfrontEntries.reduce(
+    (sum, e) => sum + (e.initial_qty ?? e.qty) * (e.cost ?? 0),
+    0
+  );
+
+  // Unsold upfront stock still on shelf
+  const upfrontRemainingStockValue = upfrontEntries.reduce(
+    (sum, e) => sum + e.qty * (e.cost ?? 0),
+    0
+  );
+
+  // Expired upfront food (lost money)
+  const upfrontExpiredLoss = upfrontEntries
+    .filter((e) => e.expires_at < todayDateStr)
+    .reduce((sum, e) => sum + e.qty * (e.cost ?? 0), 0);
+
+  // Paid consignment settlements
+  const consignmentPaidTotal = settlements
+    .filter((s) => s.paid)
+    .reduce(
+      (sum, s) =>
+        sum +
+        (s.consignment_settlement_items ?? []).reduce(
+          (iSum, item) =>
+            iSum + (item.delivered_qty - item.remaining_qty) * (item.cost ?? 0),
+          0
+        ),
+      0
+    );
+
+  // Break-even target: cash investment in upfront foods
+  const breakEvenTarget = upfrontPaidTotal;
+  const breakEvenNeeded = Math.max(0, breakEvenTarget - revenue);
+  const breakEvenPercent =
+    breakEvenTarget > 0
+      ? Math.min(100, Math.round((revenue / breakEvenTarget) * 100))
+      : 100;
+  const breakEvenAchieved = revenue >= breakEvenTarget;
+  const netSurplus = revenue - breakEvenTarget;
+
+  return {
+    upfrontPaidTotal,
+    upfrontRemainingStockValue,
+    upfrontExpiredLoss,
+    consignmentPaidTotal,
+    totalFoodCostSold: soldFoodCost,
+    breakEvenTarget,
+    breakEvenNeeded,
+    breakEvenPercent,
+    breakEvenAchieved,
+    netSurplus,
+  };
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function computeStats(transactions: Transaction[]): AnalyticsStats {
   let revenue = 0;
   let itemsSold = 0;
@@ -50,10 +137,14 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     byPayment[pm].revenue += Number(t.total);
     byPayment[pm].count += 1;
 
-    const d = new Date(t.ts);
-    const dayKey = d.toDateString();
+    // Explicitly compute Malaysia time (UTC+8) for hour and day grouping
+    const tsMs = new Date(t.ts).getTime();
+    const myDate = new Date(tsMs + MY_OFFSET_MS);
+    const dayKey = myDate.toISOString().slice(0, 10); // YYYY-MM-DD
+    const hour = myDate.getUTCHours();
+
     byDay[dayKey] = (byDay[dayKey] || 0) + Number(t.total);
-    byHour[d.getHours()] += Number(t.total);
+    byHour[hour] += Number(t.total);
 
     for (const line of t.transaction_items) {
       itemsSold += line.qty;
@@ -79,16 +170,21 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     }
   }
 
-  const dayEntries = Object.entries(byDay).sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime());
-  const byDayChart = dayEntries.slice(-30).map(([key, value]) => ({
-    label: new Date(key).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-    value,
-  }));
+  const dayEntries = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
+  const byDayChart = dayEntries.slice(-30).map(([key, value]) => {
+    const parts = key.split("-");
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    const dayNum = parseInt(parts[2], 10);
+    return {
+      label: `${MONTH_NAMES[monthIndex]} ${dayNum}`,
+      value,
+    };
+  });
 
-  const byHourChart = byHour.map((value, h) => ({
-    label: h === 0 ? "12am" : h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`,
-    value,
-  }));
+  const byHourChart = byHour.map((value, h) => {
+    const label = h === 0 ? "12am" : h === 12 ? "12pm" : h < 12 ? `${h}am` : `${h - 12}pm`;
+    return { label, value };
+  });
 
   return {
     revenue,

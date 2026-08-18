@@ -27,7 +27,10 @@ export const getBusinessContext = cache(async () => {
     .eq("id", user.id)
     .single();
 
-  if (!profile) redirect("/login");
+  if (!profile) {
+    await supabase.auth.signOut();
+    redirect("/signup?error=" + encodeURIComponent("No cafe workspace found for this account. Please sign up to create a workspace."));
+  }
 
   const businessName = (profile.businesses as unknown as { name: string } | null)?.name ?? "Cafe";
 

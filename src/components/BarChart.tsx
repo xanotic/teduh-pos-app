@@ -30,10 +30,7 @@ export function BarChart({ data, prefix }: { data: { label: string; value: numbe
               fill={i === maxIndex ? "#f3afc4" : "#e48ca9"}
               opacity={i === maxIndex ? 1 : 0.55}
             >
-              <title>
-                {d.label}: {prefix}
-                {d.value.toFixed(2)}
-              </title>
+              <title>{`${d.label}: ${prefix ? prefix + " " : ""}${d.value.toFixed(2)}`}</title>
             </rect>
           );
         })}
