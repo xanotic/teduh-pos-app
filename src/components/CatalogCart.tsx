@@ -55,13 +55,13 @@ export function CatalogCart({
       showToast("Set a price for this item first (Menu tab)");
       return;
     }
-    if (item.stock != null && item.stock === 0) {
-      return;
-    }
     const existing = cart.find((l) => l.itemId === item.id);
     if (item.stock != null && (existing?.qty ?? 0) >= item.stock) {
-      showToast(`Only ${item.stock} left in stock for ${item.name}`);
-      return;
+      showToast(
+        item.stock === 0
+          ? `${item.name} is marked out of stock — adding anyway`
+          : `Only ${item.stock} counted in stock for ${item.name} — adding anyway`
+      );
     }
     setCart((prev) => {
       if (existing) {
@@ -86,8 +86,11 @@ export function CatalogCart({
       const item = items.find((i) => i.id === itemId);
       const line = cart.find((l) => l.itemId === itemId);
       if (item && item.stock != null && line && line.qty >= item.stock) {
-        showToast(`Only ${item.stock} left in stock for ${item.name}`);
-        return;
+        showToast(
+          item.stock === 0
+            ? `${item.name} is marked out of stock — adding anyway`
+            : `Only ${item.stock} counted in stock for ${item.name} — adding anyway`
+        );
       }
     }
     setCart((prev) =>
@@ -189,16 +192,13 @@ export function CatalogCart({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {visible.map((it) => {
-              const isOut = it.stock != null && it.stock === 0;
               const effectivePrice = getItemPrice(it);
 
               return (
                 <button
                   key={it.id}
                   onClick={() => addToCart(it)}
-                  className={`flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-3.5 text-left shadow-sm transition active:scale-95 ${
-                    isOut ? "opacity-50" : ""
-                  }`}
+                  className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-3.5 text-left shadow-sm transition active:scale-95"
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
@@ -260,8 +260,6 @@ export function CatalogCart({
 
           <div className="flex flex-col gap-2">
             {cart.map((l) => {
-              const menuItem = items.find((i) => i.id === l.itemId);
-              const atMax = menuItem?.stock != null && l.qty >= menuItem.stock;
               return (
                 <div key={l.itemId} className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2">
                   <div className="flex-1 min-w-0">
@@ -278,10 +276,7 @@ export function CatalogCart({
                     <span className="w-4 text-center text-sm font-bold">{l.qty}</span>
                     <button
                       onClick={() => changeQty(l.itemId, 1)}
-                      disabled={atMax}
-                      className={`h-6 w-6 rounded-full bg-surface-alt text-sm font-bold ${
-                        atMax ? "opacity-30 cursor-not-allowed" : ""
-                      }`}
+                      className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold"
                     >
                       +
                     </button>
