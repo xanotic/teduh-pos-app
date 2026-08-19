@@ -4,7 +4,19 @@ import { AccountClient } from "./AccountClient";
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const { userEmail, businessName } = await getBusinessContext();
+  const { supabase, businessId, userEmail, businessName } = await getBusinessContext();
 
-  return <AccountClient currentEmail={userEmail ?? ""} businessName={businessName} />;
+  const { data: business } = await supabase
+    .from("businesses")
+    .select("boss_whatsapp")
+    .eq("id", businessId)
+    .single();
+
+  return (
+    <AccountClient
+      currentEmail={userEmail ?? ""}
+      businessName={businessName}
+      bossWhatsapp={business?.boss_whatsapp ?? ""}
+    />
+  );
 }

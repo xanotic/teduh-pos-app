@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { MenuItem, PaymentMethod, Transaction, TransactionItem } from "@/lib/types";
 import { fmt } from "@/lib/format";
+import { computeStats } from "@/lib/analytics";
 import { updateTransaction, voidTransaction } from "@/lib/actions/sales";
 import { setActualClosing, setOpeningBalance } from "./tillActions";
 
@@ -22,6 +23,8 @@ export function HistoryClient({
   openingBalance,
   openingBalanceIsSaved,
   actualClosing,
+  businessName,
+  bossWhatsapp,
 }: {
   transactions: Transaction[];
   menuItems: MenuItem[];
@@ -34,15 +37,54 @@ export function HistoryClient({
   openingBalance: number;
   openingBalanceIsSaved: boolean;
   actualClosing: number | null;
+  businessName: string;
+  bossWhatsapp: string;
 }) {
   const total = transactions.reduce((s, t) => s + Number(t.total), 0);
   const router = useRouter();
   const heading = isToday ? "Today's Sales" : isYesterday ? "Yesterday's Sales" : "Sales";
 
   const [methodFilter, setMethodFilter] = useState<PaymentMethod | "All">("All");
+  const [copied, setCopied] = useState(false);
   const filteredTransactions =
     methodFilter === "All" ? transactions : transactions.filter((t) => t.payment_method === methodFilter);
   const filteredTotal = filteredTransactions.reduce((s, t) => s + Number(t.total), 0);
+
+  const stats = computeStats(transactions);
+  const cash = stats.byPayment.find((p) => p.name === "Cash")?.revenue ?? 0;
+  const qr = stats.byPayment.find((p) => p.name === "QR Pay")?.revenue ?? 0;
+  const dateLabel = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+
+  function buildReportText() {
+    const lines = [
+      `📊 ${businessName} — Daily Report`,
+      dateLabel,
+      "",
+      `💰 Total Sales: ${fmt(stats.revenue)}`,
+      `💵 Cash: ${fmt(cash)}`,
+      `🔳 QR Pay: ${fmt(qr)}`,
+      `📈 Est. Profit${stats.costPartial ? " (partial)" : ""}: ${stats.hasCost ? fmt(stats.profit) : "— (no cost set)"}`,
+      `🧾 Orders: ${stats.orders}`,
+    ];
+    return lines.join("\n");
+  }
+
+  function sendReport() {
+    const text = encodeURIComponent(buildReportText());
+    const url = bossWhatsapp ? `https://wa.me/${bossWhatsapp}?text=${text}` : `https://wa.me/?text=${text}`;
+    window.open(url, "_blank");
+  }
+
+  function copyReport() {
+    navigator.clipboard.writeText(buildReportText());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -86,7 +128,7 @@ export function HistoryClient({
         })}
       </p>
 
-      <div className="mb-5 flex items-center justify-between rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between rounded-2xl border border-border bg-surface p-4 shadow-sm">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Total revenue</div>
           <div className="text-2xl font-extrabold text-success">{fmt(total)}</div>
@@ -94,6 +136,23 @@ export function HistoryClient({
         <div className="text-sm text-ink-muted">
           {transactions.length} {transactions.length === 1 ? "transaction" : "transactions"}
         </div>
+      </div>
+
+      <div className="mb-5 flex gap-2">
+        <button
+          onClick={sendReport}
+          disabled={transactions.length === 0}
+          className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-bold text-white disabled:opacity-40"
+        >
+          📤 Send Daily Report
+        </button>
+        <button
+          onClick={copyReport}
+          disabled={transactions.length === 0}
+          className="rounded-xl border border-border px-4 py-2.5 text-sm font-bold text-ink-muted disabled:opacity-40"
+        >
+          {copied ? "Copied ✓" : "📋 Copy"}
+        </button>
       </div>
 
       <TillCard
