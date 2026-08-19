@@ -223,7 +223,7 @@ export function ConsignmentClient({
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <>
       <h1 className="text-xl font-bold text-ink">Consignment Payout</h1>
       <p className="mb-5 text-sm text-ink-muted">
         Log tonight&apos;s baki (remaining stock) for consignment supplier items only — auto-calculated using actual POS register sales
@@ -440,7 +440,7 @@ export function ConsignmentClient({
         ))}
         {settlements.length === 0 && <p className="text-sm text-ink-muted">No settlements logged yet.</p>}
       </div>
-    </div>
+    </>
   );
 }
 
