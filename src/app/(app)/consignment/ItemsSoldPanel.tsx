@@ -12,6 +12,7 @@ interface SoldRow {
   cost: number;
   hasMissingCost: boolean;
   type: ItemType;
+  sales: { ts: string; qty: number }[];
 }
 
 const TYPE_FILTERS: { key: ItemType | "all"; label: string }[] = [
@@ -30,16 +31,19 @@ export function ItemsSoldPanel({
   breakdown,
   date,
   range,
+  todayDate,
 }: {
   breakdown: SoldRow[];
   date: string | null;
   range: { from: string; to: string } | null;
+  todayDate: string;
 }) {
   const router = useRouter();
   const [fromVal, setFromVal] = useState(range?.from ?? date ?? "");
   const [toVal, setToVal] = useState(range?.to ?? date ?? "");
   const [typeFilter, setTypeFilter] = useState<ItemType | "all">("all");
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
@@ -50,7 +54,7 @@ export function ItemsSoldPanel({
     ? `${fmtShort(range.from)} – ${fmtShort(range.to)}`
     : date
       ? fmtShort(date)
-      : "Today";
+      : `Today · ${fmtShort(todayDate)}`;
 
   function goDate(d: string) {
     if (!d) return;
@@ -66,7 +70,10 @@ export function ItemsSoldPanel({
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
-      ...filtered.map((r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`),
+      ...filtered.flatMap((r) => [
+        `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`,
+        ...r.sales.map((s) => `   • ${fmtDateTime(s.ts, !!range)} — ${s.qty}×`),
+      ]),
       "",
       `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
     ];
@@ -153,26 +160,47 @@ export function ItemsSoldPanel({
       {filtered.length > 0 ? (
         <>
           <div className="flex flex-col gap-1.5">
-            {filtered.map((r) => (
-              <div key={r.name} className="flex items-center justify-between rounded-lg bg-bg px-3 py-1.5 text-sm">
-                <span className="flex min-w-0 items-center gap-2 text-ink">
-                  <span className="font-extrabold text-accent">{r.qty}×</span>
-                  <span className="truncate">{r.name}</span>
-                  {r.type !== "unknown" && (
-                    <span className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${TYPE_BADGE[r.type]}`}>
-                      {r.type === "consignment" ? "Consignment" : "Upfront"}
+            {filtered.map((r) => {
+              const isOpen = expanded === r.name;
+              return (
+                <div key={r.name} className="rounded-lg bg-bg px-3 py-1.5">
+                  <button
+                    onClick={() => setExpanded(isOpen ? null : r.name)}
+                    className="flex w-full items-center justify-between gap-2 text-left text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-ink">
+                      <span className="font-extrabold text-accent">{r.qty}×</span>
+                      <span className="truncate">{r.name}</span>
+                      {r.type !== "unknown" && (
+                        <span
+                          className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${TYPE_BADGE[r.type]}`}
+                        >
+                          {r.type === "consignment" ? "Consignment" : "Upfront"}
+                        </span>
+                      )}
+                      <span className="flex-none text-ink-muted">{isOpen ? "▲" : "▼"}</span>
                     </span>
+                    <span className="flex-none font-bold text-ink-muted">
+                      {r.hasMissingCost ? (
+                        <span className="text-gold">{r.cost > 0 ? `${fmt(r.cost)}+` : "no cost set"}</span>
+                      ) : (
+                        fmt(r.cost)
+                      )}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="mt-1.5 flex flex-col gap-1 border-t border-border pt-1.5">
+                      {r.sales.map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs text-ink-muted">
+                          <span>{fmtDateTime(s.ts, !!range)}</span>
+                          <span className="font-semibold">{s.qty}×</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </span>
-                <span className="flex-none font-bold text-ink-muted">
-                  {r.hasMissingCost ? (
-                    <span className="text-gold">{r.cost > 0 ? `${fmt(r.cost)}+` : "no cost set"}</span>
-                  ) : (
-                    fmt(r.cost)
-                  )}
-                </span>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-sm font-bold text-ink">
             <span>{totalQty} item{totalQty === 1 ? "" : "s"} sold</span>
@@ -193,4 +221,12 @@ export function ItemsSoldPanel({
 
 function fmtShort(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtDateTime(ts: string, includeDate: boolean) {
+  return new Date(ts).toLocaleString("en-US", {
+    ...(includeDate ? { month: "short", day: "numeric" } : {}),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

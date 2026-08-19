@@ -29,7 +29,8 @@ export default async function ConsignmentPage({
   let soldQuery = supabase
     .from("transaction_items")
     .select("name, qty, cost, transactions!inner(ts, business_id)")
-    .eq("transactions.business_id", businessId);
+    .eq("transactions.business_id", businessId)
+    .order("ts", { referencedTable: "transactions", ascending: true });
 
   if (soldRange) {
     const start = new Date(soldRange.from + "T00:00:00+08:00");
@@ -72,17 +73,24 @@ export default async function ConsignmentPage({
     posSalesMap[key] = (posSalesMap[key] || 0) + (row.qty || 0);
   });
 
-  const soldBreakdownMap: Record<string, { name: string; qty: number; cost: number; hasMissingCost: boolean }> = {};
-  (soldRows ?? []).forEach((row: { name: string; qty: number; cost: number | null }) => {
-    const key = row.name.trim();
-    soldBreakdownMap[key] ??= { name: key, qty: 0, cost: 0, hasMissingCost: false };
-    soldBreakdownMap[key].qty += row.qty || 0;
-    if (row.cost == null) {
-      soldBreakdownMap[key].hasMissingCost = true;
-    } else {
-      soldBreakdownMap[key].cost += (row.qty || 0) * Number(row.cost);
+  const soldBreakdownMap: Record<
+    string,
+    { name: string; qty: number; cost: number; hasMissingCost: boolean; sales: { ts: string; qty: number }[] }
+  > = {};
+  (soldRows ?? []).forEach(
+    (row: { name: string; qty: number; cost: number | null; transactions: { ts: string } | { ts: string }[] }) => {
+      const key = row.name.trim();
+      soldBreakdownMap[key] ??= { name: key, qty: 0, cost: 0, hasMissingCost: false, sales: [] };
+      soldBreakdownMap[key].qty += row.qty || 0;
+      if (row.cost == null) {
+        soldBreakdownMap[key].hasMissingCost = true;
+      } else {
+        soldBreakdownMap[key].cost += (row.qty || 0) * Number(row.cost);
+      }
+      const ts = Array.isArray(row.transactions) ? row.transactions[0]?.ts : row.transactions?.ts;
+      if (ts) soldBreakdownMap[key].sales.push({ ts, qty: row.qty || 0 });
     }
-  });
+  );
 
   // Classify each sold item as consignment/upfront/unknown, same logic as
   // ConsignmentClient uses for the settlement form's item-type badges.
@@ -112,7 +120,7 @@ export default async function ConsignmentPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <ItemsSoldPanel breakdown={soldBreakdown} date={soldDate} range={soldRange} />
+      <ItemsSoldPanel breakdown={soldBreakdown} date={soldDate} range={soldRange} todayDate={todayInMalaysia()} />
       <ConsignmentClient
         settlements={(settlements ?? []) as ConsignmentSettlement[]}
         menuItems={(menu ?? []) as MenuItem[]}
