@@ -74,6 +74,15 @@ export interface ConsignmentSettlement {
   consignment_settlement_items: ConsignmentSettlementItem[];
 }
 
+export interface MiscExpense {
+  id: string;
+  business_id: string;
+  description: string;
+  amount: number;
+  spent_at: string;
+  created_at: string;
+}
+
 export interface CartLine {
   itemId: string;
   name: string;

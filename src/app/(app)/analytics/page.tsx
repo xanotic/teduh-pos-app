@@ -7,7 +7,7 @@ import { BarChart } from "@/components/BarChart";
 import { RankList } from "@/components/RankList";
 import { TopItemsPanel } from "@/components/TopItemsPanel";
 import { ChipList } from "@/components/ChipList";
-import { DatePicker } from "./DatePicker";
+import { DatePicker, DateRangePicker } from "./DatePicker";
 import { ExportButton } from "./ExportButton";
 
 export const dynamic = "force-dynamic";
@@ -30,12 +30,14 @@ const RANGES: { key: RangeKey; label: string }[] = [
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; date?: string }>;
+  searchParams: Promise<{ range?: string; date?: string; from?: string; to?: string }>;
 }) {
   const { supabase, businessId } = await getBusinessContext();
-  const { range: rangeParam, date: dateParam } = await searchParams;
+  const { range: rangeParam, date: dateParam, from: fromParam, to: toParam } = await searchParams;
 
-  const customDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : null;
+  const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const customRange = isDate(fromParam) && isDate(toParam) ? { from: fromParam!, to: toParam! } : null;
+  const customDate = !customRange && isDate(dateParam) ? dateParam! : null;
   const range: RangeKey = (["today", "7d", "30d", "all"] as const).includes(rangeParam as RangeKey)
     ? (rangeParam as RangeKey)
     : "today";
@@ -45,7 +47,11 @@ export default async function AnalyticsPage({
     .select("*, transaction_items(*)")
     .eq("business_id", businessId);
 
-  if (customDate) {
+  if (customRange) {
+    const rangeStartD = new Date(customRange.from + "T00:00:00+08:00");
+    const rangeEndD = new Date(new Date(customRange.to + "T00:00:00+08:00").getTime() + 86400000);
+    query = query.gte("ts", rangeStartD.toISOString()).lt("ts", rangeEndD.toISOString());
+  } else if (customDate) {
     const dayStart = new Date(customDate + "T00:00:00+08:00");
     const dayEnd = new Date(dayStart.getTime() + 86400000);
     query = query.gte("ts", dayStart.toISOString()).lt("ts", dayEnd.toISOString());
@@ -107,14 +113,19 @@ export default async function AnalyticsPage({
     kpis.push({ label: "Giveaways (cost)", value: fmt(stats.giveawayCost) });
   }
 
-  const rangeDisplayLabel = customDate
-    ? new Date(customDate + "T00:00:00").toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : RANGES.find((r) => r.key === range)?.label || "Today";
+  const fmtShortDate = (s: string) =>
+    new Date(s + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const rangeDisplayLabel = customRange
+    ? `${fmtShortDate(customRange.from)} – ${fmtShortDate(customRange.to)}`
+    : customDate
+      ? new Date(customDate + "T00:00:00").toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : RANGES.find((r) => r.key === range)?.label || "Today";
 
   return (
     <div>
@@ -122,9 +133,11 @@ export default async function AnalyticsPage({
         <div>
           <h1 className="text-xl font-bold text-ink">Analytics</h1>
           <p className="text-sm text-ink-muted">
-            {customDate
-              ? `Showing ${new Date(customDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.`
-              : "Pick a range to filter revenue, food expenses, and break-even status below."}
+            {customRange
+              ? `Showing ${rangeDisplayLabel}.`
+              : customDate
+                ? `Showing ${new Date(customDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.`
+                : "Pick a range to filter revenue, food expenses, and break-even status below."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -134,7 +147,7 @@ export default async function AnalyticsPage({
                 key={r.key}
                 href={`/analytics?range=${r.key}`}
                 className={`rounded-lg px-3.5 py-2 text-sm font-bold ${
-                  !customDate && range === r.key ? "bg-accent text-white" : "text-ink-muted"
+                  !customDate && !customRange && range === r.key ? "bg-accent text-white" : "text-ink-muted"
                 }`}
               >
                 {r.label}
@@ -142,6 +155,11 @@ export default async function AnalyticsPage({
             ))}
           </div>
           <DatePicker value={customDate ?? todayInMalaysia()} active={!!customDate} />
+          <DateRangePicker
+            from={customRange?.from ?? todayInMalaysia()}
+            to={customRange?.to ?? todayInMalaysia()}
+            active={!!customRange}
+          />
           <ExportButton
             transactions={(txns ?? []) as Transaction[]}
             stats={stats}
@@ -260,7 +278,7 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
-      {!customDate && range !== "today" && (
+      {(customRange || (!customDate && range !== "today")) && (
         <div className="mb-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
           <h3 className="mb-2 text-sm font-bold text-ink">Revenue by Day</h3>
           <BarChart data={stats.byDay} prefix="RM" />
