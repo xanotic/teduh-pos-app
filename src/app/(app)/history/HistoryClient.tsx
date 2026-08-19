@@ -39,6 +39,11 @@ export function HistoryClient({
   const router = useRouter();
   const heading = isToday ? "Today's Sales" : isYesterday ? "Yesterday's Sales" : "Sales";
 
+  const [methodFilter, setMethodFilter] = useState<PaymentMethod | "All">("All");
+  const filteredTransactions =
+    methodFilter === "All" ? transactions : transactions.filter((t) => t.payment_method === methodFilter);
+  const filteredTotal = filteredTransactions.reduce((s, t) => s + Number(t.total), 0);
+
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-1 flex items-center gap-2">
@@ -99,13 +104,39 @@ export function HistoryClient({
         actualClosing={actualClosing}
       />
 
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex flex-1 gap-1 rounded-xl bg-surface-alt p-1">
+          {(["All", "Cash", "QR Pay", "Giveaway"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMethodFilter(m)}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold ${
+                methodFilter === m ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              {m === "QR Pay" ? "🔳 QR" : m === "Cash" ? "💵 Cash" : m === "Giveaway" ? "🎁 Giveaway" : "All"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {methodFilter !== "All" && (
+        <p className="mb-3 text-xs text-ink-muted">
+          {filteredTransactions.length} {filteredTransactions.length === 1 ? "transaction" : "transactions"} ·{" "}
+          <span className="font-bold text-ink">{fmt(filteredTotal)}</span>
+        </p>
+      )}
+
       <div className="flex flex-col gap-2">
-        {transactions.map((t) => (
+        {filteredTransactions.map((t) => (
           <TxnCard key={t.id} txn={t} menuItems={menuItems} />
         ))}
-        {transactions.length === 0 && (
+        {filteredTransactions.length === 0 && (
           <p className="text-sm text-ink-muted">
-            {isToday ? "No sales recorded yet today." : "No sales recorded on this day."}
+            {transactions.length === 0
+              ? isToday
+                ? "No sales recorded yet today."
+                : "No sales recorded on this day."
+              : `No ${methodFilter} transactions on this day.`}
           </p>
         )}
       </div>
