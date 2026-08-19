@@ -9,7 +9,8 @@ type ItemType = "consignment" | "upfront" | "unknown";
 interface SoldRow {
   name: string;
   qty: number;
-  revenue: number;
+  cost: number;
+  hasMissingCost: boolean;
   type: ItemType;
 }
 
@@ -42,7 +43,8 @@ export function ItemsSoldPanel({
 
   const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
-  const totalRevenue = filtered.reduce((s, r) => s + r.revenue, 0);
+  const totalCost = filtered.reduce((s, r) => s + r.cost, 0);
+  const anyMissingCost = filtered.some((r) => r.hasMissingCost);
 
   const label = range
     ? `${fmtShort(range.from)} – ${fmtShort(range.to)}`
@@ -64,9 +66,9 @@ export function ItemsSoldPanel({
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
-      ...filtered.map((r) => `${r.qty}× ${r.name} — ${fmt(r.revenue)}`),
+      ...filtered.map((r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`),
       "",
-      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalRevenue)}`,
+      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
     ];
     navigator.clipboard.writeText(lines.join("\n"));
     setCopied(true);
@@ -162,14 +164,25 @@ export function ItemsSoldPanel({
                     </span>
                   )}
                 </span>
-                <span className="flex-none font-bold text-ink-muted">{fmt(r.revenue)}</span>
+                <span className="flex-none font-bold text-ink-muted">
+                  {r.hasMissingCost ? (
+                    <span className="text-gold">{r.cost > 0 ? `${fmt(r.cost)}+` : "no cost set"}</span>
+                  ) : (
+                    fmt(r.cost)
+                  )}
+                </span>
               </div>
             ))}
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-sm font-bold text-ink">
             <span>{totalQty} item{totalQty === 1 ? "" : "s"} sold</span>
-            <span>{fmt(totalRevenue)}</span>
+            <span>{fmt(totalCost)}</span>
           </div>
+          {anyMissingCost && (
+            <p className="mt-2 text-xs text-gold">
+              Some items have no cost set on Menu — their cost isn&apos;t fully counted above.
+            </p>
+          )}
         </>
       ) : (
         <p className="text-sm text-ink-muted">No sales in this period.</p>

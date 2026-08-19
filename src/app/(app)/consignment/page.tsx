@@ -28,7 +28,7 @@ export default async function ConsignmentPage({
 
   let soldQuery = supabase
     .from("transaction_items")
-    .select("name, qty, price, transactions!inner(ts, business_id)")
+    .select("name, qty, cost, transactions!inner(ts, business_id)")
     .eq("transactions.business_id", businessId);
 
   if (soldRange) {
@@ -72,12 +72,16 @@ export default async function ConsignmentPage({
     posSalesMap[key] = (posSalesMap[key] || 0) + (row.qty || 0);
   });
 
-  const soldBreakdownMap: Record<string, { name: string; qty: number; revenue: number }> = {};
-  (soldRows ?? []).forEach((row: { name: string; qty: number; price: number }) => {
+  const soldBreakdownMap: Record<string, { name: string; qty: number; cost: number; hasMissingCost: boolean }> = {};
+  (soldRows ?? []).forEach((row: { name: string; qty: number; cost: number | null }) => {
     const key = row.name.trim();
-    soldBreakdownMap[key] ??= { name: key, qty: 0, revenue: 0 };
+    soldBreakdownMap[key] ??= { name: key, qty: 0, cost: 0, hasMissingCost: false };
     soldBreakdownMap[key].qty += row.qty || 0;
-    soldBreakdownMap[key].revenue += (row.qty || 0) * Number(row.price || 0);
+    if (row.cost == null) {
+      soldBreakdownMap[key].hasMissingCost = true;
+    } else {
+      soldBreakdownMap[key].cost += (row.qty || 0) * Number(row.cost);
+    }
   });
 
   // Classify each sold item as consignment/upfront/unknown, same logic as
