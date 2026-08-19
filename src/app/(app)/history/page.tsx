@@ -24,7 +24,7 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ date?: string }>;
 }) {
-  const { supabase, businessId } = await getBusinessContext();
+  const { supabase, businessId, businessName } = await getBusinessContext();
   const { date } = await searchParams;
 
   const today = todayInMalaysia();
@@ -37,26 +37,33 @@ export default async function HistoryPage({
   const prevDayStart = new Date(prevDateStr + "T00:00:00+08:00");
   const prevDayEnd = new Date(prevDayStart.getTime() + 86400000);
 
-  const [{ data }, { data: menu }, { data: balanceRow }, { data: prevBalanceRow }, { data: prevCashTxns }] =
-    await Promise.all([
-      supabase
-        .from("transactions")
-        .select("*, transaction_items(*)")
-        .eq("business_id", businessId)
-        .gte("ts", dayStart.toISOString())
-        .lt("ts", dayEnd.toISOString())
-        .order("ts", { ascending: false }),
-      supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
-      supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", dateStr).maybeSingle(),
-      supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", prevDateStr).maybeSingle(),
-      supabase
-        .from("transactions")
-        .select("total")
-        .eq("business_id", businessId)
-        .eq("payment_method", "Cash")
-        .gte("ts", prevDayStart.toISOString())
-        .lt("ts", prevDayEnd.toISOString()),
-    ]);
+  const [
+    { data },
+    { data: menu },
+    { data: balanceRow },
+    { data: prevBalanceRow },
+    { data: prevCashTxns },
+    { data: business },
+  ] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("*, transaction_items(*)")
+      .eq("business_id", businessId)
+      .gte("ts", dayStart.toISOString())
+      .lt("ts", dayEnd.toISOString())
+      .order("ts", { ascending: false }),
+    supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+    supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", dateStr).maybeSingle(),
+    supabase.from("daily_balances").select("*").eq("business_id", businessId).eq("date", prevDateStr).maybeSingle(),
+    supabase
+      .from("transactions")
+      .select("total")
+      .eq("business_id", businessId)
+      .eq("payment_method", "Cash")
+      .gte("ts", prevDayStart.toISOString())
+      .lt("ts", prevDayEnd.toISOString()),
+    supabase.from("businesses").select("boss_whatsapp").eq("id", businessId).single(),
+  ]);
 
   const transactions = (data ?? []) as Transaction[];
   const cashTotal = transactions
@@ -83,6 +90,8 @@ export default async function HistoryPage({
       openingBalance={balance?.opening_balance ?? carriedOpeningBalance}
       openingBalanceIsSaved={balance != null}
       actualClosing={balance?.actual_closing ?? null}
+      businessName={businessName}
+      bossWhatsapp={business?.boss_whatsapp ?? ""}
     />
   );
 }
