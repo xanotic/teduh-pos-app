@@ -58,6 +58,29 @@ export async function updateMenuItem(
   revalidatePath("/giveaway");
 }
 
+export async function bulkUpdateStock(updates: { id: string; stock: number | null }[]) {
+  if (!updates.length) return;
+  const { supabase, businessId } = await getBusinessContext();
+  const results = await Promise.all(
+    updates.map((u) =>
+      supabase
+        .from("menu_items")
+        .update({ stock: u.stock })
+        .eq("id", u.id)
+        .eq("business_id", businessId)
+        .select("id")
+        .single()
+    )
+  );
+  const failed = results.filter((r) => r.error || !r.data);
+  if (failed.length) {
+    throw new Error(`${failed.length} of ${updates.length} item(s) failed to save. Refresh and try again.`);
+  }
+  revalidatePath("/menu");
+  revalidatePath("/sell");
+  revalidatePath("/giveaway");
+}
+
 export async function deleteMenuItem(id: string) {
   const { supabase } = await getBusinessContext();
   const { error } = await supabase.from("menu_items").delete().eq("id", id);

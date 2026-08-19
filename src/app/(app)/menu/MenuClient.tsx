@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { MenuItem } from "@/lib/types";
-import { addMenuItem, deleteMenuItem, updateMenuItem } from "./actions";
+import { addMenuItem, bulkUpdateStock, deleteMenuItem, updateMenuItem } from "./actions";
 import { importLegacyBackup } from "./importActions";
 
 export function MenuClient({ items }: { items: MenuItem[] }) {
@@ -16,6 +16,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   const [importText, setImportText] = useState("");
   const [importPending, startImport] = useTransition();
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [restockOpen, setRestockOpen] = useState(false);
 
   const byCategory = items.reduce<Record<string, MenuItem[]>>((acc, it) => {
     (acc[it.category] ??= []).push(it);
@@ -56,6 +57,14 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
           cost set (outlined below) — their sales are left out of Est. Profit on Analytics.
         </div>
       )}
+
+      <button
+        onClick={() => setRestockOpen((o) => !o)}
+        className="mb-5 w-full rounded-xl border border-accent px-4 py-2.5 text-sm font-bold text-accent"
+      >
+        {restockOpen ? "Close Quick Restock" : "⚡ Quick Restock (update all stock at once)"}
+      </button>
+      {restockOpen && <QuickRestock items={items} onDone={() => setRestockOpen(false)} />}
 
       <form
         onSubmit={handleAdd}
@@ -177,6 +186,78 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
         </button>
         {importResult && <p className="mt-2 text-xs font-semibold text-ink-muted">{importResult}</p>}
       </div>
+    </div>
+  );
+}
+
+function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
+  const [pending, startTransition] = useTransition();
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(items.map((it) => [it.id, it.stock == null ? "" : String(it.stock)]))
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  function handleSave() {
+    const updates = items
+      .map((it) => {
+        const raw = values[it.id] ?? "";
+        const newStock = raw === "" ? null : parseInt(raw, 10) || 0;
+        return { id: it.id, stock: newStock, changed: newStock !== it.stock };
+      })
+      .filter((u) => u.changed)
+      .map((u) => ({ id: u.id, stock: u.stock }));
+
+    if (!updates.length) {
+      setSavedMsg("Nothing changed.");
+      setTimeout(() => setSavedMsg(null), 2000);
+      return;
+    }
+
+    setError(null);
+    startTransition(async () => {
+      try {
+        await bulkUpdateStock(updates);
+        setSavedMsg(`Saved ${updates.length} item(s).`);
+        setTimeout(() => setSavedMsg(null), 2500);
+        onDone();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Save failed — try again.");
+      }
+    });
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      <p className="mb-3 text-xs text-ink-muted">
+        Type the new stock for each item, Tab to the next box, then hit Save all once at the end —
+        no need to click in and out of each field.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {items.map((it) => (
+          <div key={it.id} className="flex items-center justify-between gap-3 rounded-lg bg-bg px-3 py-1.5">
+            <span className="text-sm text-ink">{it.name}</span>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              value={values[it.id]}
+              onChange={(e) => setValues((prev) => ({ ...prev, [it.id]: e.target.value }))}
+              placeholder="—"
+              className="w-20 flex-none rounded-md border border-border px-2 py-1 text-right text-sm"
+            />
+          </div>
+        ))}
+      </div>
+      <button
+        disabled={pending}
+        onClick={handleSave}
+        className="mt-4 w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-white disabled:opacity-50"
+      >
+        {pending ? "Saving…" : "Save all"}
+      </button>
+      {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
+      {savedMsg && <p className="mt-2 text-xs font-semibold text-success">{savedMsg}</p>}
     </div>
   );
 }
