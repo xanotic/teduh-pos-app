@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { CartLine, HappyHourSettings, MenuItem, PaymentMethod } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { finalizeSale } from "@/lib/actions/sales";
+import { cancelHappyHour } from "@/app/(app)/happy-hour/actions";
 import {
   calculateHappyHourItemPrice,
   formatTime12h,
@@ -126,6 +127,23 @@ export function CatalogCart({
     });
   }
 
+  function handleCancelHappyHourGlobal() {
+    startTransition(async () => {
+      try {
+        await cancelHappyHour();
+        setCart((prev) =>
+          prev.map((line) => {
+            const originalItem = items.find((i) => i.id === line.itemId);
+            return originalItem ? { ...line, price: originalItem.price } : line;
+          })
+        );
+        showToast("Happy hour cancelled and deactivated");
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : "Failed to cancel happy hour");
+      }
+    });
+  }
+
   return (
     <div>
       {mode === "sell" && (happyHour?.is_enabled || happyHour?.force_active) && (
@@ -156,13 +174,24 @@ export function CatalogCart({
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setHappyHourOverride((v) => (v === null ? !autoHappyHourActive : !v))}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-ink-muted transition hover:text-ink"
-          >
-            {isHappyHour ? "Pause for this order" : "Apply Happy Hour"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setHappyHourOverride((v) => (v === null ? !autoHappyHourActive : !v))}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-ink-muted transition hover:text-ink"
+            >
+              {isHappyHour ? "Pause for this order" : "Apply Happy Hour"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelHappyHourGlobal}
+              disabled={pending}
+              className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger transition hover:bg-danger hover:text-white"
+              title="Cancel and deactivate Happy Hour storewide"
+            >
+              End Promo
+            </button>
+          </div>
         </div>
       )}
 

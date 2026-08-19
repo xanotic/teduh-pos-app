@@ -50,8 +50,9 @@ export function isHappyHourActive(
   settings: HappyHourSettings | null | undefined,
   now: Date = new Date()
 ): boolean {
-  if (!settings || !settings.is_enabled) return false;
+  if (!settings) return false;
   if (settings.force_active) return true;
+  if (!settings.is_enabled) return false;
 
   const todayStr = getLocalDateString(now);
 
@@ -89,7 +90,7 @@ export function getHappyHourStatus(
 } {
   const discountLabel = getHappyHourDiscountLabel(settings);
 
-  if (!settings || !settings.is_enabled) {
+  if (!settings || (!settings.is_enabled && !settings.force_active)) {
     return {
       isActive: false,
       type: "disabled",
