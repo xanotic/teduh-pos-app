@@ -79,7 +79,32 @@ export default async function ConsignmentPage({
     soldBreakdownMap[key].qty += row.qty || 0;
     soldBreakdownMap[key].revenue += (row.qty || 0) * Number(row.price || 0);
   });
-  const soldBreakdown = Object.values(soldBreakdownMap).sort((a, b) => b.qty - a.qty);
+
+  // Classify each sold item as consignment/upfront/unknown, same logic as
+  // ConsignmentClient uses for the settlement form's item-type badges.
+  const consignmentNames = new Set<string>();
+  const upfrontNames = new Set<string>();
+  (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
+    const key = e.item.trim().toLowerCase();
+    if (e.payment_type === "consignment") consignmentNames.add(key);
+    else if (e.payment_type === "upfront") upfrontNames.add(key);
+  });
+  (settlements ?? []).forEach((s) => {
+    s.consignment_settlement_items?.forEach((it: { name: string }) => {
+      consignmentNames.add(it.name.trim().toLowerCase());
+    });
+  });
+
+  function classify(name: string): "consignment" | "upfront" | "unknown" {
+    const key = name.trim().toLowerCase();
+    if (consignmentNames.has(key)) return "consignment";
+    if (upfrontNames.has(key)) return "upfront";
+    return "unknown";
+  }
+
+  const soldBreakdown = Object.values(soldBreakdownMap)
+    .map((r) => ({ ...r, type: classify(r.name) }))
+    .sort((a, b) => b.qty - a.qty);
 
   return (
     <div className="mx-auto max-w-3xl">

@@ -4,11 +4,26 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { fmt } from "@/lib/format";
 
+type ItemType = "consignment" | "upfront" | "unknown";
+
 interface SoldRow {
   name: string;
   qty: number;
   revenue: number;
+  type: ItemType;
 }
+
+const TYPE_FILTERS: { key: ItemType | "all"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "consignment", label: "Consignment" },
+  { key: "upfront", label: "Upfront" },
+];
+
+const TYPE_BADGE: Record<ItemType, string> = {
+  consignment: "bg-accent-soft text-accent",
+  upfront: "bg-gold/15 text-gold",
+  unknown: "bg-surface-alt text-ink-muted",
+};
 
 export function ItemsSoldPanel({
   breakdown,
@@ -22,9 +37,12 @@ export function ItemsSoldPanel({
   const router = useRouter();
   const [fromVal, setFromVal] = useState(range?.from ?? date ?? "");
   const [toVal, setToVal] = useState(range?.to ?? date ?? "");
+  const [typeFilter, setTypeFilter] = useState<ItemType | "all">("all");
+  const [copied, setCopied] = useState(false);
 
-  const totalQty = breakdown.reduce((s, r) => s + r.qty, 0);
-  const totalRevenue = breakdown.reduce((s, r) => s + r.revenue, 0);
+  const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
+  const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
+  const totalRevenue = filtered.reduce((s, r) => s + r.revenue, 0);
 
   const label = range
     ? `${fmtShort(range.from)} – ${fmtShort(range.to)}`
@@ -40,6 +58,19 @@ export function ItemsSoldPanel({
   function goRange(from: string, to: string) {
     if (!from || !to) return;
     router.push(`/consignment?from=${from}&to=${to}`);
+  }
+
+  function copyList() {
+    const lines = [
+      `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
+      "",
+      ...filtered.map((r) => `${r.qty}× ${r.name} — ${fmt(r.revenue)}`),
+      "",
+      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalRevenue)}`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -94,15 +125,44 @@ export function ItemsSoldPanel({
         </div>
       </div>
 
-      {breakdown.length > 0 ? (
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
+          {TYPE_FILTERS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                typeFilter === t.key ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={copyList}
+          disabled={filtered.length === 0}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted disabled:opacity-40"
+        >
+          {copied ? "Copied ✓" : "📋 Copy list"}
+        </button>
+      </div>
+
+      {filtered.length > 0 ? (
         <>
           <div className="flex flex-col gap-1.5">
-            {breakdown.map((r) => (
+            {filtered.map((r) => (
               <div key={r.name} className="flex items-center justify-between rounded-lg bg-bg px-3 py-1.5 text-sm">
-                <span className="text-ink">
-                  <span className="font-extrabold text-accent">{r.qty}×</span> {r.name}
+                <span className="flex min-w-0 items-center gap-2 text-ink">
+                  <span className="font-extrabold text-accent">{r.qty}×</span>
+                  <span className="truncate">{r.name}</span>
+                  {r.type !== "unknown" && (
+                    <span className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${TYPE_BADGE[r.type]}`}>
+                      {r.type === "consignment" ? "Consignment" : "Upfront"}
+                    </span>
+                  )}
                 </span>
-                <span className="font-bold text-ink-muted">{fmt(r.revenue)}</span>
+                <span className="flex-none font-bold text-ink-muted">{fmt(r.revenue)}</span>
               </div>
             ))}
           </div>
