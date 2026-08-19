@@ -294,6 +294,7 @@ function EditRow({
   const [notes, setNotes] = useState(entry.notes ?? "");
   const [qty, setQty] = useState(String(entry.qty));
   const [cost, setCost] = useState(entry.cost != null ? String(entry.cost) : "");
+  const [paymentType, setPaymentType] = useState<PaymentType>(entry.payment_type);
   const [error, setError] = useState<string | null>(null);
 
   function handleSave() {
@@ -307,6 +308,7 @@ function EditRow({
           notes: notes.trim(),
           qty: parseInt(qty, 10) || 1,
           cost: cost === "" ? null : parseFloat(cost) || 0,
+          paymentType,
         });
         onSaved();
       } catch (e) {
@@ -317,6 +319,25 @@ function EditRow({
 
   return (
     <div className="rounded-xl border border-accent bg-surface p-3">
+      <div className="mb-3">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+          Payment type
+        </label>
+        <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setPaymentType(t.key)}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-bold ${
+                paymentType === t.key ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
         <div className="col-span-2">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Item</label>

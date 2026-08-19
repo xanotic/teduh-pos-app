@@ -55,6 +55,7 @@ export async function updateShelfLifeEntry(
     notes: string;
     qty: number;
     cost: number | null;
+    paymentType: PaymentType;
   }
 ) {
   const { supabase, businessId } = await getBusinessContext();
@@ -77,6 +78,7 @@ export async function updateShelfLifeEntry(
       qty: newQty,
       initial_qty: newQty,
       cost: input.cost,
+      payment_type: input.paymentType,
     })
     .eq("id", id)
     .eq("business_id", businessId);
