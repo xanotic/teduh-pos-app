@@ -47,6 +47,72 @@ export async function addShelfLifeEntry(input: {
   revalidatePath("/sell");
 }
 
+export async function updateShelfLifeEntry(
+  id: string,
+  input: {
+    item: string;
+    expiresAt: string;
+    notes: string;
+    qty: number;
+    cost: number | null;
+  }
+) {
+  const { supabase, businessId } = await getBusinessContext();
+  const newQty = input.qty || 1;
+
+  const { data: old, error: fetchError } = await supabase
+    .from("shelf_life")
+    .select("item, qty")
+    .eq("id", id)
+    .eq("business_id", businessId)
+    .single();
+  if (fetchError || !old) throw new Error(fetchError?.message ?? "Entry not found.");
+
+  const { error } = await supabase
+    .from("shelf_life")
+    .update({
+      item: input.item,
+      expires_at: input.expiresAt,
+      notes: input.notes || null,
+      qty: newQty,
+      initial_qty: newQty,
+      cost: input.cost,
+    })
+    .eq("id", id)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+
+  const oldName = old.item.trim();
+  const newName = input.item.trim();
+
+  async function adjustStock(name: string, delta: number) {
+    if (!delta) return;
+    const { data: menuItem } = await supabase
+      .from("menu_items")
+      .select("id, stock")
+      .eq("business_id", businessId)
+      .ilike("name", name)
+      .maybeSingle();
+    if (menuItem && menuItem.stock != null) {
+      await supabase
+        .from("menu_items")
+        .update({ stock: Math.max(0, menuItem.stock + delta) })
+        .eq("id", menuItem.id);
+    }
+  }
+
+  if (oldName.toLowerCase() === newName.toLowerCase()) {
+    await adjustStock(newName, newQty - old.qty);
+  } else {
+    await adjustStock(oldName, -old.qty);
+    await adjustStock(newName, newQty);
+  }
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/menu");
+  revalidatePath("/sell");
+}
+
 export async function deleteShelfLifeEntry(id: string) {
   const { supabase, businessId } = await getBusinessContext();
 
