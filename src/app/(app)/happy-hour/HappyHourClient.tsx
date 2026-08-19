@@ -5,14 +5,17 @@ import type { HappyHourDiscountType, HappyHourSettings, MenuItem } from "@/lib/t
 import { fmt } from "@/lib/format";
 import {
   calculateHappyHourItemPrice,
-  formatTime12h,
-  getHappyHourStatus,
-  getLocalDateString,
 } from "@/lib/happyHour";
-import { saveHappyHourSettings, toggleForceActive } from "./actions";
+import { startHappyHour, stopHappyHour, saveHappyHourSettings } from "./actions";
 
 const PRESET_FLAT_PRICES = [3, 4, 5, 6, 7, 8, 10];
 const PRESET_PERCENTAGES = [10, 15, 20, 25, 30, 50];
+const DURATION_OPTIONS = [
+  { hours: null, label: "Until I Stop It", icon: "♾️" },
+  { hours: 1, label: "1 Hour", icon: "⏱️" },
+  { hours: 2, label: "2 Hours", icon: "⏱️" },
+  { hours: 3, label: "3 Hours", icon: "⏱️" },
+];
 
 export function HappyHourClient({
   initialSettings,
@@ -23,22 +26,16 @@ export function HappyHourClient({
 }) {
   const [pending, startTransition] = useTransition();
 
-  const todayStr = useMemo(() => getLocalDateString(new Date()), []);
-  const todayFormatted = useMemo(
-    () =>
-      new Date().toLocaleDateString("en-MY", {
-        weekday: "long",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-    []
-  );
+  const isCurrentlyActive = Boolean(initialSettings?.force_active || initialSettings?.is_enabled);
 
-  const [isEnabled, setIsEnabled] = useState(initialSettings?.is_enabled ?? false);
-  const [discountType, setDiscountType] = useState<HappyHourDiscountType>(
-    initialSettings?.discount_type ?? "percent"
-  );
+  // Active settings currently running on the POS / Supabase
+  const activeDiscountType: HappyHourDiscountType = initialSettings?.discount_type ?? "percent";
+  const activePrice = initialSettings?.price != null ? Number(initialSettings.price) : 5.0;
+  const activeDiscountPercent =
+    initialSettings?.discount_percent != null ? Number(initialSettings.discount_percent) : 20;
+
+  // Local draft inputs in the form
+  const [discountType, setDiscountType] = useState<HappyHourDiscountType>(activeDiscountType);
   const [price, setPrice] = useState(
     initialSettings?.price != null ? String(initialSettings.price) : "5.00"
   );
@@ -47,244 +44,279 @@ export function HappyHourClient({
       ? String(initialSettings.discount_percent)
       : "20"
   );
-  const [startTime, setStartTime] = useState(initialSettings?.start_time ?? "17:00");
-  const [endTime, setEndTime] = useState(initialSettings?.end_time ?? "19:00");
-  const [targetDate, setTargetDate] = useState<string>(
-    initialSettings?.target_date ?? todayStr
-  );
-  const [forceActive, setForceActive] = useState(initialSettings?.force_active ?? false);
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const numericPrice = parseFloat(price) || 0;
   const numericPercent = parseFloat(discountPercent) || 0;
 
+  const hasUnsavedChanges =
+    isCurrentlyActive &&
+    (discountType !== activeDiscountType ||
+      (discountType === "percent" && numericPercent !== activeDiscountPercent) ||
+      (discountType === "flat" && numericPrice !== activePrice));
+
+  // Preview settings for the draft table below
   const currentPreviewSettings: HappyHourSettings = useMemo(
     () => ({
       id: initialSettings?.id ?? "preview",
       business_id: initialSettings?.business_id ?? "",
-      is_enabled: isEnabled,
+      is_enabled: isCurrentlyActive,
       discount_type: discountType,
       price: numericPrice,
       discount_percent: numericPercent,
-      start_time: startTime,
-      end_time: endTime,
-      target_date: targetDate,
-      force_active: forceActive,
+      start_time: initialSettings?.start_time ?? "00:00",
+      end_time: initialSettings?.end_time ?? "23:59",
+      target_date: null,
+      force_active: isCurrentlyActive,
       updated_at: new Date().toISOString(),
     }),
-    [
-      initialSettings,
-      isEnabled,
-      discountType,
-      numericPrice,
-      numericPercent,
-      startTime,
-      endTime,
-      targetDate,
-      forceActive,
-    ]
+    [initialSettings, isCurrentlyActive, discountType, numericPrice, numericPercent]
   );
-
-  const status = getHappyHourStatus(currentPreviewSettings);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   }
 
-  function applyPresetDuration(hours: number) {
-    const now = new Date();
-    const startH = String(now.getHours()).padStart(2, "0");
-    const startM = String(now.getMinutes()).padStart(2, "0");
-    const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
-    const endH = String(end.getHours()).padStart(2, "0");
-    const endM = String(end.getMinutes()).padStart(2, "0");
+  function handleStartSession() {
+    if (discountType === "percent" && (numericPercent <= 0 || numericPercent > 100)) {
+      showToast("Please enter a valid discount percentage (1–100%)");
+      return;
+    }
+    if (discountType === "flat" && (numericPrice < 0 || isNaN(numericPrice))) {
+      showToast("Please enter a valid flat price");
+      return;
+    }
 
-    setStartTime(`${startH}:${startM}`);
-    setEndTime(`${endH}:${endM}`);
-    setTargetDate(todayStr);
-    setIsEnabled(true);
-    showToast(`Set for the next ${hours} hour${hours > 1 ? "s" : ""} today`);
-  }
-
-  function applyFixedSlot(start: string, end: string, label: string) {
-    setStartTime(start);
-    setEndTime(end);
-    setTargetDate(todayStr);
-    setIsEnabled(true);
-    showToast(`Time slot set to ${label}`);
-  }
-
-  function handleSave(e?: React.FormEvent) {
-    if (e) e.preventDefault();
     startTransition(async () => {
       try {
-        await saveHappyHourSettings({
-          isEnabled,
+        await startHappyHour({
           discountType,
           price: numericPrice,
           discountPercent: numericPercent,
-          startTime,
-          endTime,
-          targetDate: todayStr, // Always sets for today
-          forceActive,
+          durationHours: selectedDuration,
         });
-        setTargetDate(todayStr);
-        showToast("Happy hour settings saved for today!");
+        showToast(
+          `Happy Hour started! (${
+            discountType === "percent" ? `${numericPercent}% OFF` : fmt(numericPrice)
+          })`
+        );
       } catch (err) {
-        showToast(err instanceof Error ? err.message : "Failed to save settings.");
+        showToast(err instanceof Error ? err.message : "Failed to start Happy Hour.");
       }
     });
   }
 
-  function handleToggleForce() {
-    const nextForced = !forceActive;
-    setForceActive(nextForced);
-    if (nextForced) setIsEnabled(true);
+  function handleStopSession() {
     startTransition(async () => {
       try {
-        await toggleForceActive(nextForced);
-        showToast(nextForced ? "Flash sale activated now!" : "Flash sale ended.");
+        await stopHappyHour();
+        showToast("Happy Hour ended. Catalog prices restored.");
       } catch (err) {
-        showToast(err instanceof Error ? err.message : "Failed to toggle flash sale.");
+        showToast(err instanceof Error ? err.message : "Failed to stop Happy Hour.");
       }
     });
+  }
+
+  function handleUpdateLiveSession() {
+    if (discountType === "percent" && (numericPercent <= 0 || numericPercent > 100)) {
+      showToast("Please enter a valid discount percentage (1–100%)");
+      return;
+    }
+    if (discountType === "flat" && (numericPrice < 0 || isNaN(numericPrice))) {
+      showToast("Please enter a valid flat price");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await saveHappyHourSettings({
+          isEnabled: true,
+          forceActive: true,
+          discountType,
+          price: numericPrice,
+          discountPercent: numericPercent,
+          startTime: initialSettings?.start_time,
+          endTime: initialSettings?.end_time,
+        });
+        showToast(
+          `Updated live promo to ${
+            discountType === "percent" ? `${numericPercent}% OFF` : fmt(numericPrice)
+          }!`
+        );
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : "Failed to update settings.");
+      }
+    });
+  }
+
+  function handleResetDraft() {
+    setDiscountType(activeDiscountType);
+    setPrice(String(activePrice));
+    setDiscountPercent(String(activeDiscountPercent));
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Happy Hour & Promotions</h1>
-          <p className="text-sm text-ink-muted">
-            Set a one-time promo schedule for today or trigger an instant flash sale.
-          </p>
-        </div>
-        <button
-          onClick={handleToggleForce}
-          disabled={pending}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition shadow-sm ${
-            forceActive
-              ? "bg-danger text-white hover:bg-danger/90"
-              : "border border-gold bg-surface-alt text-gold hover:bg-gold hover:text-black"
-          }`}
-        >
-          <span>{forceActive ? "⏹ Stop Flash Sale" : "⚡ Force Active Now"}</span>
-        </button>
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-ink">Happy Hour & Promotions</h1>
+        <p className="text-sm text-ink-muted">
+          Run instant promotional pricing sessions for your POS catalog with one click.
+        </p>
       </div>
 
-      {/* Live Status Card */}
+      {/* Hero Live Status Card (Shows strictly the CURRENT LIVE ACTIVE price from POS) */}
       <div
-        className={`mb-6 rounded-2xl border p-4 shadow-sm transition ${
-          status.type === "forced"
-            ? "border-gold bg-gold/10"
-            : status.type === "active"
-              ? "border-success bg-success-soft"
-              : status.type === "scheduled"
-                ? "border-border bg-surface"
-                : "border-border bg-surface opacity-80"
+        className={`rounded-2xl border p-5 shadow-sm transition ${
+          isCurrentlyActive
+            ? "border-accent bg-accent-soft/40 shadow-accent/10"
+            : "border-border bg-surface opacity-90"
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
             <span
-              className={`flex h-3 w-3 rounded-full ${
-                status.isActive ? "animate-ping bg-success" : "bg-ink-muted"
+              className={`flex h-4 w-4 rounded-full ${
+                isCurrentlyActive ? "animate-ping bg-success" : "bg-ink-muted/40"
               }`}
             />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-ink">{status.label}</span>
-                {status.isActive && (
-                  <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-extrabold text-white">
+                <span className="text-base font-bold text-ink">
+                  {isCurrentlyActive ? "Happy Hour is LIVE" : "Happy Hour is Inactive"}
+                </span>
+                {isCurrentlyActive && (
+                  <span className="rounded-full bg-accent px-2.5 py-0.5 text-[10px] font-extrabold tracking-wide text-white">
                     LIVE ON POS
                   </span>
                 )}
               </div>
-              <p className="text-xs text-ink-muted">{status.subLabel}</p>
+              <p className="text-xs text-ink-muted mt-0.5">
+                {isCurrentlyActive
+                  ? `All catalog items sell for ${
+                      activeDiscountType === "percent"
+                        ? `${activeDiscountPercent}% OFF standard price`
+                        : `${fmt(activePrice)} flat`
+                    }.`
+                  : "Standard catalog prices are active on the register."}
+              </p>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
-              {discountType === "percent" ? "Discount" : "Flat Price"}
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+                {isCurrentlyActive
+                  ? activeDiscountType === "percent"
+                    ? "Active Discount"
+                    : "Flat Price"
+                  : "Status"}
+              </div>
+              <div className="text-xl font-extrabold text-accent">
+                {isCurrentlyActive
+                  ? activeDiscountType === "percent"
+                    ? `${activeDiscountPercent}% OFF`
+                    : fmt(activePrice)
+                  : "OFF"}
+              </div>
             </div>
-            <div className="text-xl font-extrabold text-accent">
-              {discountType === "percent" ? `${numericPercent}% OFF` : fmt(numericPrice)}
-            </div>
+            {isCurrentlyActive && (
+              <button
+                type="button"
+                onClick={handleStopSession}
+                disabled={pending}
+                className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-2 text-xs font-bold text-danger transition hover:bg-danger hover:text-white shadow-sm"
+              >
+                🛑 Stop Happy Hour
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Settings Form */}
-      <form
-        onSubmit={handleSave}
-        className="rounded-2xl border border-border bg-surface p-5 shadow-sm flex flex-col gap-6"
-      >
-        {/* Enable / Disable Switch */}
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div>
-            <div className="text-sm font-bold text-ink">Enable Promotion</div>
-            <p className="text-xs text-ink-muted">
-              Activate automatic pricing for the Sell register during today&apos;s scheduled time.
-            </p>
+      {/* Session Configuration Card */}
+      <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm flex flex-col gap-6">
+        {/* Unsaved Changes Banner */}
+        {hasUnsavedChanges && (
+          <div className="flex items-center justify-between rounded-xl border border-gold/40 bg-gold/10 px-4 py-2.5 text-xs text-ink">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>
+                You have changed draft settings. POS is currently using{" "}
+                <strong className="text-accent font-bold">
+                  {activeDiscountType === "percent"
+                    ? `${activeDiscountPercent}% OFF`
+                    : fmt(activePrice)}
+                </strong>
+                . Click <strong>Update Live Price Settings</strong> below to apply.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetDraft}
+              className="text-xs font-bold text-accent underline hover:opacity-80 ml-2"
+            >
+              Reset
+            </button>
           </div>
-          <label className="relative inline-flex cursor-pointer items-center">
-            <input
-              type="checkbox"
-              checked={isEnabled}
-              onChange={(e) => setIsEnabled(e.target.checked)}
-              className="peer sr-only"
-            />
-            <div className="peer h-6 w-11 rounded-full bg-surface-alt after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-ink-muted after:transition-all after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-full peer-checked:after:bg-white" />
-          </label>
-        </div>
+        )}
 
-        {/* Discount Type Selector */}
         <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
-            Discount Option
-          </label>
-          <div className="grid grid-cols-2 gap-2">
+          <h2 className="text-sm font-bold text-ink mb-1">1. Choose Discount Mode</h2>
+          <p className="text-xs text-ink-muted mb-3">
+            Select how you want the discount applied across your menu.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => setDiscountType("percent")}
-              className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition ${
+              className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition ${
                 discountType === "percent"
                   ? "border-accent bg-accent-soft text-accent shadow-sm"
                   : "border-border bg-surface-alt text-ink-muted hover:text-ink"
               }`}
             >
-              <span className="text-lg">🏷️</span>
-              <span className="text-xs font-bold">Percentage Discount</span>
-              <span className="text-[11px] opacity-80">e.g. 20% off all catalog items</span>
+              <span className="text-2xl">🏷️</span>
+              <div>
+                <div className="text-sm font-bold text-ink">Percentage Discount</div>
+                <div className="text-xs text-ink-muted">e.g. 20% off all catalog items</div>
+              </div>
             </button>
 
             <button
               type="button"
               onClick={() => setDiscountType("flat")}
-              className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition ${
+              className={`flex items-start gap-3 rounded-xl border p-3.5 text-left transition ${
                 discountType === "flat"
                   ? "border-accent bg-accent-soft text-accent shadow-sm"
                   : "border-border bg-surface-alt text-ink-muted hover:text-ink"
               }`}
             >
-              <span className="text-lg">💵</span>
-              <span className="text-xs font-bold">Exact / Flat Price</span>
-              <span className="text-[11px] opacity-80">e.g. RM 5.00 for all items</span>
+              <span className="text-2xl">💵</span>
+              <div>
+                <div className="text-sm font-bold text-ink">Flat / Exact Price</div>
+                <div className="text-xs text-ink-muted">e.g. RM 5.00 for all items</div>
+              </div>
             </button>
           </div>
         </div>
 
-        {/* Discount Amount Configuration */}
-        {discountType === "percent" ? (
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
-              Discount Percentage (%)
-            </label>
-            <p className="mb-2 text-xs text-ink-muted">
-              Each menu item will be discounted by this percentage from its normal price.
-            </p>
-            <div className="flex items-center gap-3">
+        {/* Step 2: Set Amount */}
+        <div>
+          <h2 className="text-sm font-bold text-ink mb-1">
+            2. {discountType === "percent" ? "Set Discount Percentage" : "Set Flat Price"}
+          </h2>
+          <p className="text-xs text-ink-muted mb-3">
+            {discountType === "percent"
+              ? "Every menu item will be discounted by this percentage."
+              : "During the session, all catalog items will sell for this exact price."}
+          </p>
+
+          {discountType === "percent" ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="relative max-w-xs flex-1">
                 <input
                   type="number"
@@ -307,7 +339,7 @@ export function HappyHourClient({
                     key={p}
                     type="button"
                     onClick={() => setDiscountPercent(String(p))}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
                       numericPercent === p
                         ? "border-accent bg-accent text-white"
                         : "border-border bg-surface-alt text-ink-muted hover:text-ink"
@@ -318,16 +350,8 @@ export function HappyHourClient({
                 ))}
               </div>
             </div>
-          </div>
-        ) : (
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
-              Flat Price per Item (RM)
-            </label>
-            <p className="mb-2 text-xs text-ink-muted">
-              During happy hour, all items in the catalog will be sold for this exact price.
-            </p>
-            <div className="flex items-center gap-3">
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="relative max-w-xs flex-1">
                 <span className="absolute left-3 top-2.5 text-sm font-bold text-ink-muted">
                   RM
@@ -349,7 +373,7 @@ export function HappyHourClient({
                     key={p}
                     type="button"
                     onClick={() => setPrice(p.toFixed(2))}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
                       numericPrice === p
                         ? "border-accent bg-accent text-white"
                         : "border-border bg-surface-alt text-ink-muted hover:text-ink"
@@ -360,107 +384,45 @@ export function HappyHourClient({
                 ))}
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Step 3: Optional Duration */}
+        {!isCurrentlyActive && (
+          <div>
+            <h2 className="text-sm font-bold text-ink mb-1">3. Session Duration (Optional)</h2>
+            <p className="text-xs text-ink-muted mb-3">
+              Choose how long this session should run, or leave it until you manually stop it.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {DURATION_OPTIONS.map((opt) => {
+                const active = selectedDuration === opt.hours;
+                return (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setSelectedDuration(opt.hours)}
+                    className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-bold transition ${
+                      active
+                        ? "border-accent bg-accent-soft text-accent shadow-sm"
+                        : "border-border bg-surface-alt text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    <span>{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Today Only Time Schedule */}
-        <div className="rounded-2xl border border-border bg-surface-alt/40 p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wide text-accent">
-                  📅 Set Time for Today Only
-                </span>
-                <span className="rounded-md bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
-                  {todayFormatted}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-ink-muted">
-                One-time schedule for today. It runs only during this window and will not repeat tomorrow.
-              </p>
-            </div>
-          </div>
-
-          {/* Quick preset buttons */}
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => applyPresetDuration(1)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-ink transition hover:border-accent hover:text-accent shadow-2xs"
-            >
-              ⚡ Next 1 Hour
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPresetDuration(2)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-ink transition hover:border-accent hover:text-accent shadow-2xs"
-            >
-              ⚡ Next 2 Hours
-            </button>
-            <button
-              type="button"
-              onClick={() => applyFixedSlot("14:00", "16:00", "Afternoon (2 PM – 4 PM)")}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-ink-muted transition hover:border-accent hover:text-ink shadow-2xs"
-            >
-              ☀️ Afternoon (2–4 PM)
-            </button>
-            <button
-              type="button"
-              onClick={() => applyFixedSlot("17:00", "19:00", "Evening (5 PM – 7 PM)")}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-ink-muted transition hover:border-accent hover:text-ink shadow-2xs"
-            >
-              🌆 Evening (5–7 PM)
-            </button>
-            <button
-              type="button"
-              onClick={() => applyFixedSlot("20:00", "22:00", "Night (8 PM – 10 PM)")}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-ink-muted transition hover:border-accent hover:text-ink shadow-2xs"
-            >
-              🌙 Night (8–10 PM)
-            </button>
-          </div>
-
-          {/* Custom Time Window */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                Start Time
-              </label>
-              <input
-                type="time"
-                required
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="input text-sm font-semibold"
-              />
-              <span className="mt-1 block text-[11px] text-ink-muted">
-                {formatTime12h(startTime)}
-              </span>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                End Time
-              </label>
-              <input
-                type="time"
-                required
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="input text-sm font-semibold"
-              />
-              <span className="mt-1 block text-[11px] text-ink-muted">
-                {formatTime12h(endTime)}
-              </span>
-            </div>
-          </div>
-        </div>
-
         {/* Catalog Price Preview */}
         {menuItems.length > 0 && (
-          <div className="rounded-xl border border-border bg-bg p-3">
-            <div className="mb-2 flex items-center justify-between">
+          <div className="rounded-xl border border-border bg-bg p-3.5">
+            <div className="mb-2.5 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">
-                Price Preview ({menuItems.length} items)
+                {isCurrentlyActive ? "Preview of Draft Settings" : "Price Preview"} ({menuItems.length} items)
               </span>
               <span className="text-xs text-ink-muted font-medium">
                 {discountType === "percent" ? (
@@ -486,14 +448,14 @@ export function HappyHourClient({
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-xs"
+                    className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-xs"
                   >
                     <span className="truncate font-semibold text-ink">{m.name}</span>
                     <div className="flex items-center gap-1.5">
                       <span className="text-ink-muted line-through">{fmt(m.price)}</span>
                       <span className="font-bold text-accent">{fmt(discountedPrice)}</span>
                       {pct > 0 && (
-                        <span className="rounded bg-success-soft px-1 text-[10px] font-bold text-success">
+                        <span className="rounded bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success">
                           -{pct}%
                         </span>
                       )}
@@ -505,20 +467,46 @@ export function HappyHourClient({
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-xl bg-accent py-3.5 text-sm font-bold text-white transition hover:bg-accent-strong disabled:opacity-50 shadow-sm"
-        >
-          {pending ? "Saving..." : "Set & Activate for Today"}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          {!isCurrentlyActive ? (
+            <button
+              type="button"
+              onClick={handleStartSession}
+              disabled={pending}
+              className="flex-1 rounded-xl bg-accent py-3.5 text-sm font-bold text-white transition hover:bg-accent-strong disabled:opacity-50 shadow-sm flex items-center justify-center gap-2"
+            >
+              <span>🚀</span>
+              <span>{pending ? "Starting..." : "Start Happy Hour Now"}</span>
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={handleUpdateLiveSession}
+                disabled={pending}
+                className="flex-1 rounded-xl bg-accent py-3.5 text-sm font-bold text-white transition hover:bg-accent-strong disabled:opacity-50 shadow-sm"
+              >
+                {pending ? "Updating..." : "🔄 Update Live Price Settings"}
+              </button>
+              <button
+                type="button"
+                onClick={handleStopSession}
+                disabled={pending}
+                className="rounded-xl border border-danger/40 bg-danger/10 px-6 py-3.5 text-sm font-bold text-danger transition hover:bg-danger hover:text-white disabled:opacity-50 shadow-sm"
+              >
+                🛑 Stop Happy Hour
+              </button>
+            </>
+          )}
+        </div>
 
         {toast && (
           <div className="rounded-lg bg-ink px-3 py-2 text-center text-xs font-semibold text-white">
             {toast}
           </div>
         )}
-      </form>
+      </div>
     </div>
   );
 }
