@@ -99,6 +99,49 @@ export default async function AnalyticsPage({
     .filter((it) => it.price > 0 && !soldNames.has(it.name))
     .map((it) => it.name);
 
+  // Trend vs previous period — only meaningful for preset, non-custom windows.
+  let trendPercent: number | null = null;
+  let trendUp: boolean | null = null;
+  if (!customRange && !customDate && range !== "all") {
+    const currentStart = rangeStart(range)!;
+    const duration = Date.now() - currentStart.getTime();
+    const previousStart = new Date(currentStart.getTime() - duration);
+    const { data: prevTxns } = await supabase
+      .from("transactions")
+      .select("total")
+      .eq("business_id", businessId)
+      .gte("ts", previousStart.toISOString())
+      .lt("ts", currentStart.toISOString());
+    const prevRevenue = (prevTxns ?? []).reduce((sum, t) => sum + Number(t.total), 0);
+    if (prevRevenue > 0) {
+      trendPercent = Math.round(((stats.revenue - prevRevenue) / prevRevenue) * 100);
+      trendUp = stats.revenue >= prevRevenue;
+    } else if (stats.revenue > 0) {
+      trendPercent = 100;
+      trendUp = true;
+    }
+  }
+
+  // Per-item margin ranking — which items are actually worth the shelf space.
+  const itemMargins = stats.byItem
+    .filter((i) => i.hasCost)
+    .map((i) => ({ name: i.name, margin: i.revenue - i.cost, revenue: i.revenue }))
+    .sort((a, b) => b.margin - a.margin);
+
+  // Cost paid out by sourcing model — upfront ledger is a lifetime total,
+  // independent of whatever break-even start date is selected above.
+  const consignmentPendingTotal = ((settlementsData ?? []) as ConsignmentSettlement[])
+    .filter((s) => !s.paid)
+    .reduce(
+      (sum, s) =>
+        sum +
+        (s.consignment_settlement_items ?? []).reduce(
+          (iSum, item) => iSum + (item.delivered_qty - item.remaining_qty) * (item.cost ?? 0),
+          0
+        ),
+      0
+    );
+
   const breakEvenStartLabel = new Date(breakEvenStart + "T00:00:00").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -106,7 +149,11 @@ export default async function AnalyticsPage({
   });
 
   const kpis: { label: string; value: string; hint?: string }[] = [
-    { label: "Revenue", value: fmt(stats.revenue) },
+    {
+      label: "Revenue",
+      value: fmt(stats.revenue),
+      hint: trendPercent !== null ? `${trendUp ? "↑" : "↓"} ${Math.abs(trendPercent)}% vs previous period` : undefined,
+    },
     { label: `Upfront Food Paid (Since ${breakEvenStartLabel})`, value: fmt(foodFinancials.upfrontPaidTotal) },
     { label: "Food Cost (Sold)", value: fmt(stats.cost) },
     {
@@ -253,8 +300,8 @@ export default async function AnalyticsPage({
           </div>
         </div>
 
-        {/* 4 Summary Stat Boxes */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Summary Stat Boxes */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
               Upfront Food Paid (Since {breakEvenStartLabel})
@@ -302,6 +349,58 @@ export default async function AnalyticsPage({
             </div>
             <div className="mt-0.5 text-[10px] text-ink-muted">Value of upfront food on shelf</div>
           </div>
+
+          <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+              Lost to Expiry
+            </div>
+            <div className="text-base font-extrabold text-danger">
+              {fmt(foodFinancials.upfrontExpiredLoss)}
+            </div>
+            <div className="mt-0.5 text-[10px] text-ink-muted">Upfront stock that expired unsold</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Consignment vs Upfront — cost paid out by sourcing model */}
+      <div className="mb-5 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <h2 className="mb-1 text-sm font-bold text-ink flex items-center gap-1.5">
+          <span>📦</span> Consignment vs Upfront
+        </h2>
+        <p className="mb-3 text-xs text-ink-muted">
+          What you've paid out under each supplier model — not revenue split, since sales aren't tagged by sourcing model.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">Upfront</div>
+            <div className="flex flex-col gap-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Paid (lifetime)</span>
+                <strong className="text-ink">{fmt(foodFinancials.upfrontPaidTotal)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Unsold on shelf</span>
+                <strong className="text-gold">{fmt(foodFinancials.upfrontRemainingStockValue)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Lost to expiry</span>
+                <strong className="text-danger">{fmt(foodFinancials.upfrontExpiredLoss)}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">Consignment</div>
+            <div className="flex flex-col gap-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Settled &amp; paid</span>
+                <strong className="text-ink">{fmt(foodFinancials.consignmentPaidTotal)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">Pending payment</span>
+                <strong className="text-gold">{fmt(consignmentPendingTotal)}</strong>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -312,9 +411,16 @@ export default async function AnalyticsPage({
         </div>
       )}
 
-      <div className="mb-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <h3 className="mb-2 text-sm font-bold text-ink">Busiest Hours</h3>
-        <BarChart data={stats.byHour} prefix="RM" />
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+          <h3 className="mb-2 text-sm font-bold text-ink">Busiest Hours</h3>
+          <BarChart data={stats.byHour} prefix="RM" />
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+          <h3 className="mb-2 text-sm font-bold text-ink">Revenue by Weekday</h3>
+          <BarChart data={stats.byWeekday} prefix="RM" />
+        </div>
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -327,6 +433,19 @@ export default async function AnalyticsPage({
           />
         </div>
       </div>
+
+      {itemMargins.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+          <h3 className="mb-1 text-sm font-bold text-ink">Item Profitability</h3>
+          <p className="mb-3 text-xs text-ink-muted">
+            Revenue minus cost per item — what's actually worth the shelf space, not just what sells the most.
+          </p>
+          <RankList
+            rows={itemMargins.map((i) => ({ label: i.name, value: fmt(i.margin), sortVal: i.margin }))}
+            limit={8}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">

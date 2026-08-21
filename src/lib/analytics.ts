@@ -26,11 +26,12 @@ export interface AnalyticsStats {
   hasCost: boolean;
   costPartial: boolean;
   giveawayCost: number;
-  byItem: { name: string; qty: number; revenue: number }[];
+  byItem: { name: string; qty: number; revenue: number; cost: number; hasCost: boolean }[];
   byCategory: { name: string; qty: number; revenue: number }[];
   byPayment: { name: string; revenue: number; count: number }[];
   byDay: { label: string; value: number }[];
   byHour: { label: string; value: number }[];
+  byWeekday: { label: string; value: number }[];
 }
 
 export interface FoodFinancialStats {
@@ -127,11 +128,13 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
   let anyMissingCost = false;
   let giveawayCost = 0;
 
-  const byItem: Record<string, { name: string; qty: number; revenue: number }> = {};
+  const byItem: Record<string, { name: string; qty: number; revenue: number; cost: number; hasCost: boolean }> = {};
   const byCategory: Record<string, { name: string; qty: number; revenue: number }> = {};
   const byPayment: Record<string, { name: string; revenue: number; count: number }> = {};
   const byDay: Record<string, number> = {};
   const byHour = new Array(24).fill(0) as number[];
+  const byWeekday = new Array(7).fill(0) as number[];
+  const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   for (const t of transactions) {
     revenue += Number(t.total);
@@ -145,26 +148,30 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     const myDate = new Date(tsMs + MY_OFFSET_MS);
     const dayKey = myDate.toISOString().slice(0, 10); // YYYY-MM-DD
     const hour = myDate.getUTCHours();
+    const weekday = myDate.getUTCDay();
 
     byDay[dayKey] = (byDay[dayKey] || 0) + Number(t.total);
     byHour[hour] += Number(t.total);
+    byWeekday[weekday] += Number(t.total);
 
     for (const line of t.transaction_items) {
       itemsSold += line.qty;
       const lineRevenue = line.price * line.qty;
 
+      byItem[line.name] ??= { name: line.name, qty: 0, revenue: 0, cost: 0, hasCost: false };
+      byItem[line.name].qty += line.qty;
+      byItem[line.name].revenue += lineRevenue;
+
       if (typeof line.cost === "number") {
         cost += line.cost * line.qty;
         trackedRevenue += lineRevenue;
         anyCost = true;
+        byItem[line.name].cost += line.cost * line.qty;
+        byItem[line.name].hasCost = true;
         if (pm === "Giveaway") giveawayCost += line.cost * line.qty;
       } else {
         anyMissingCost = true;
       }
-
-      byItem[line.name] ??= { name: line.name, qty: 0, revenue: 0 };
-      byItem[line.name].qty += line.qty;
-      byItem[line.name].revenue += lineRevenue;
 
       const cat = line.category || "Other";
       byCategory[cat] ??= { name: cat, qty: 0, revenue: 0 };
@@ -189,6 +196,8 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     return { label, value };
   });
 
+  const byWeekdayChart = byWeekday.map((value, d) => ({ label: WEEKDAY_NAMES[d], value }));
+
   return {
     revenue,
     orders: transactions.length,
@@ -205,5 +214,6 @@ export function computeStats(transactions: Transaction[]): AnalyticsStats {
     byPayment: Object.values(byPayment).sort((a, b) => b.revenue - a.revenue),
     byDay: byDayChart,
     byHour: byHourChart,
+    byWeekday: byWeekdayChart,
   };
 }
