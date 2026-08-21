@@ -71,7 +71,7 @@ export function HistoryClient({
       `🔳 QR Pay: ${fmt(qr)}`,
       `📈 Est. Profit${stats.costPartial ? " (partial)" : ""}: ${stats.hasCost ? fmt(stats.profit) : "— (no cost set)"}`,
       `🧾 Orders: ${stats.orders}`,
-      `🎁 Giveaways: ${giveaway?.count ?? 0}${stats.giveawayCost > 0 ? ` (cost ${fmt(stats.giveawayCost)})` : ""}`,
+      `🎁 Giveaways: ${giveaway?.count ?? 0}${giveaway && giveaway.revenue > 0 ? ` (${fmt(giveaway.revenue)})` : ""}`,
     ];
     return lines.join("\n");
   }
