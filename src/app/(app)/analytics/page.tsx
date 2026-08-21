@@ -16,6 +16,12 @@ export const dynamic = "force-dynamic";
 // run in UTC regardless of the configured region (same approach as History).
 const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
 
+// Break-even tracking (cumulative_upfront_paid ledger) only started being
+// recorded from this date — revenue from before it existed would inflate
+// "recovered" against upfront costs that were never logged, so the
+// break-even window starts here instead of at the true beginning of history.
+const BREAK_EVEN_START = "2026-08-19";
+
 function todayInMalaysia(): string {
   return new Date(Date.now() + MY_OFFSET_MS).toISOString().slice(0, 10);
 }
@@ -70,7 +76,11 @@ export default async function AnalyticsPage({
         .select("*, consignment_settlement_items(*)")
         .eq("business_id", businessId),
       supabase.from("businesses").select("cumulative_upfront_paid").eq("id", businessId).single(),
-      supabase.from("transactions").select("total").eq("business_id", businessId),
+      supabase
+        .from("transactions")
+        .select("total")
+        .eq("business_id", businessId)
+        .gte("ts", new Date(BREAK_EVEN_START + "T00:00:00+08:00").toISOString()),
     ]);
 
   const stats = computeStats((txns ?? []) as Transaction[]);
@@ -90,10 +100,10 @@ export default async function AnalyticsPage({
 
   const kpis: { label: string; value: string; hint?: string }[] = [
     { label: "Revenue", value: fmt(stats.revenue) },
-    { label: "Upfront Food Paid (All-Time)", value: fmt(foodFinancials.upfrontPaidTotal) },
+    { label: "Upfront Food Paid (Since Aug 19)", value: fmt(foodFinancials.upfrontPaidTotal) },
     { label: "Food Cost (Sold)", value: fmt(stats.cost) },
     {
-      label: "To Break Even (All-Time)",
+      label: "To Break Even (Since Aug 19)",
       value: foodFinancials.breakEvenAchieved ? "RM 0.00" : fmt(foodFinancials.breakEvenNeeded),
       hint: foodFinancials.breakEvenAchieved
         ? `+${fmt(foodFinancials.netSurplus)} surplus`
@@ -194,7 +204,7 @@ export default async function AnalyticsPage({
               <span>⚖️</span> Break-Even & Food Cost Tracker
             </h2>
             <p className="text-xs text-ink-muted">
-              All-time cash paid upfront vs all-time revenue — always the running total, not just this date range.
+              Cash paid upfront vs revenue since Aug 19, 2026 (when tracking started) — always the running total, not just this date range.
             </p>
           </div>
           <span
@@ -214,10 +224,10 @@ export default async function AnalyticsPage({
         <div className="mb-4">
           <div className="mb-1.5 flex justify-between text-xs font-semibold">
             <span className="text-ink-muted">
-              Revenue (All-Time): <strong className="text-ink">{fmt(allTimeRevenue)}</strong>
+              Revenue (Since Aug 19): <strong className="text-ink">{fmt(allTimeRevenue)}</strong>
             </span>
             <span className="text-ink-muted">
-              Upfront Food Paid (All-Time): <strong className="text-ink">{fmt(foodFinancials.upfrontPaidTotal)}</strong>
+              Upfront Food Paid (Since Aug 19): <strong className="text-ink">{fmt(foodFinancials.upfrontPaidTotal)}</strong>
             </span>
           </div>
           <div className="h-3 w-full overflow-hidden rounded-full bg-surface-alt">
@@ -234,12 +244,12 @@ export default async function AnalyticsPage({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-              Upfront Food Paid (All-Time)
+              Upfront Food Paid (Since Aug 19)
             </div>
             <div className="text-base font-extrabold text-ink">
               {fmt(foodFinancials.upfrontPaidTotal)}
             </div>
-            <div className="mt-0.5 text-[10px] text-ink-muted">Total cash ever paid for upfront batches</div>
+            <div className="mt-0.5 text-[10px] text-ink-muted">Total cash paid for upfront batches since tracking started</div>
           </div>
 
           <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
