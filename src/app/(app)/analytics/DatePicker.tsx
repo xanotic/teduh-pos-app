@@ -1,7 +1,26 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+
+export function BreakEvenDatePicker({ value }: { value: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  return (
+    <input
+      type="date"
+      defaultValue={value}
+      onChange={(e) => {
+        if (!e.target.value) return;
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("beStart", e.target.value);
+        router.push(`/analytics?${params.toString()}`);
+      }}
+      className="rounded-lg border border-accent bg-accent-soft px-2.5 py-1.5 text-xs text-accent"
+    />
+  );
+}
 
 export function DatePicker({ value, active }: { value: string; active: boolean }) {
   const router = useRouter();
