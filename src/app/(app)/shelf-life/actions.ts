@@ -42,9 +42,16 @@ export async function addShelfLifeEntry(input: {
       .eq("id", menuItem.id);
   }
 
+  // Break-even tracks real cash paid upfront — a running total, since this row
+  // itself gets deleted once the batch sells through (see deductShelfLifeFifo).
+  if (input.paymentType === "upfront" && input.cost) {
+    await supabase.rpc("adjust_upfront_paid", { p_delta: entryQty * input.cost });
+  }
+
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
+  revalidatePath("/analytics");
 }
 
 export async function updateShelfLifeEntry(
@@ -63,7 +70,7 @@ export async function updateShelfLifeEntry(
 
   const { data: old, error: fetchError } = await supabase
     .from("shelf_life")
-    .select("item, qty, stock_deducted")
+    .select("item, qty, initial_qty, cost, payment_type, stock_deducted")
     .eq("id", id)
     .eq("business_id", businessId)
     .single();
@@ -95,6 +102,15 @@ export async function updateShelfLifeEntry(
     await supabase.rpc("adjust_menu_stock", { p_name: old.item.trim(), p_delta: old.qty });
   }
 
+  // Break-even's cash-paid ledger only cares about the upfront-priced portion —
+  // re-derive both sides so switching payment type or correcting qty/cost stays accurate.
+  const oldUpfrontPaid = old.payment_type === "upfront" ? (old.initial_qty ?? old.qty) * (old.cost ?? 0) : 0;
+  const newUpfrontPaid = input.paymentType === "upfront" ? newQty * (input.cost ?? 0) : 0;
+  const upfrontPaidDelta = newUpfrontPaid - oldUpfrontPaid;
+  if (upfrontPaidDelta !== 0) {
+    await supabase.rpc("adjust_upfront_paid", { p_delta: upfrontPaidDelta });
+  }
+
   const oldName = old.item.trim();
   const newName = input.item.trim();
 
@@ -124,6 +140,7 @@ export async function updateShelfLifeEntry(
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
+  revalidatePath("/analytics");
 }
 
 export async function deleteShelfLifeEntry(id: string) {
@@ -132,12 +149,19 @@ export async function deleteShelfLifeEntry(id: string) {
   // Fetch the entry details before deleting to adjust stock
   const { data: entry } = await supabase
     .from("shelf_life")
-    .select("item, qty, stock_deducted")
+    .select("item, qty, initial_qty, cost, payment_type, stock_deducted")
     .eq("id", id)
     .single();
 
   const { error } = await supabase.from("shelf_life").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  // Deleting a row is the user undoing an entry outright, so unlike a batch
+  // simply selling through, the cash-paid ledger should give that back too.
+  if (entry && entry.payment_type === "upfront" && entry.cost) {
+    const paid = (entry.initial_qty ?? entry.qty) * entry.cost;
+    if (paid) await supabase.rpc("adjust_upfront_paid", { p_delta: -paid });
+  }
 
   // If this batch already expired, the sweep already removed its stock — don't double-subtract.
   if (entry && !entry.stock_deducted) {
@@ -160,4 +184,5 @@ export async function deleteShelfLifeEntry(id: string) {
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
+  revalidatePath("/analytics");
 }

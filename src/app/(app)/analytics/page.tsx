@@ -60,7 +60,7 @@ export default async function AnalyticsPage({
     if (start) query = query.gte("ts", start.toISOString());
   }
 
-  const [{ data: txns }, { data: menu }, { data: shelfLifeData }, { data: settlementsData }] =
+  const [{ data: txns }, { data: menu }, { data: shelfLifeData }, { data: settlementsData }, { data: business }, { data: allTxns }] =
     await Promise.all([
       query,
       supabase.from("menu_items").select("*").eq("business_id", businessId),
@@ -69,12 +69,16 @@ export default async function AnalyticsPage({
         .from("consignment_settlements")
         .select("*, consignment_settlement_items(*)")
         .eq("business_id", businessId),
+      supabase.from("businesses").select("cumulative_upfront_paid").eq("id", businessId).single(),
+      supabase.from("transactions").select("total").eq("business_id", businessId),
     ]);
 
   const stats = computeStats((txns ?? []) as Transaction[]);
+  const allTimeRevenue = (allTxns ?? []).reduce((sum, t) => sum + Number(t.total), 0);
   const foodFinancials = computeFoodFinancials(
-    stats.revenue,
     stats.cost,
+    Number(business?.cumulative_upfront_paid ?? 0),
+    allTimeRevenue,
     (shelfLifeData ?? []) as ShelfLifeEntry[],
     (settlementsData ?? []) as ConsignmentSettlement[]
   );
@@ -86,10 +90,10 @@ export default async function AnalyticsPage({
 
   const kpis: { label: string; value: string; hint?: string }[] = [
     { label: "Revenue", value: fmt(stats.revenue) },
-    { label: "Upfront Food Paid", value: fmt(foodFinancials.upfrontPaidTotal) },
+    { label: "Upfront Food Paid (All-Time)", value: fmt(foodFinancials.upfrontPaidTotal) },
     { label: "Food Cost (Sold)", value: fmt(stats.cost) },
     {
-      label: "To Break Even",
+      label: "To Break Even (All-Time)",
       value: foodFinancials.breakEvenAchieved ? "RM 0.00" : fmt(foodFinancials.breakEvenNeeded),
       hint: foodFinancials.breakEvenAchieved
         ? `+${fmt(foodFinancials.netSurplus)} surplus`
@@ -190,7 +194,7 @@ export default async function AnalyticsPage({
               <span>⚖️</span> Break-Even & Food Cost Tracker
             </h2>
             <p className="text-xs text-ink-muted">
-              Track upfront food investments vs sales revenue needed to reach break-even.
+              All-time cash paid upfront vs all-time revenue — always the running total, not just this date range.
             </p>
           </div>
           <span
@@ -210,10 +214,10 @@ export default async function AnalyticsPage({
         <div className="mb-4">
           <div className="mb-1.5 flex justify-between text-xs font-semibold">
             <span className="text-ink-muted">
-              Revenue: <strong className="text-ink">{fmt(stats.revenue)}</strong>
+              Revenue (All-Time): <strong className="text-ink">{fmt(allTimeRevenue)}</strong>
             </span>
             <span className="text-ink-muted">
-              Upfront Food Target: <strong className="text-ink">{fmt(foodFinancials.upfrontPaidTotal)}</strong>
+              Upfront Food Paid (All-Time): <strong className="text-ink">{fmt(foodFinancials.upfrontPaidTotal)}</strong>
             </span>
           </div>
           <div className="h-3 w-full overflow-hidden rounded-full bg-surface-alt">
@@ -230,12 +234,12 @@ export default async function AnalyticsPage({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-              Upfront Food Paid
+              Upfront Food Paid (All-Time)
             </div>
             <div className="text-base font-extrabold text-ink">
               {fmt(foodFinancials.upfrontPaidTotal)}
             </div>
-            <div className="mt-0.5 text-[10px] text-ink-muted">Total cash paid for upfront batches</div>
+            <div className="mt-0.5 text-[10px] text-ink-muted">Total cash ever paid for upfront batches</div>
           </div>
 
           <div className="rounded-xl border border-border bg-surface-alt/40 p-3">

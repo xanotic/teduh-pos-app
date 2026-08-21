@@ -47,8 +47,9 @@ export interface FoodFinancialStats {
 }
 
 export function computeFoodFinancials(
-  revenue: number,
   soldFoodCost: number,
+  cumulativeUpfrontPaid: number,
+  allTimeRevenue: number,
   shelfLifeEntries: ShelfLifeEntry[] = [],
   settlements: ConsignmentSettlement[] = []
 ): FoodFinancialStats {
@@ -58,11 +59,11 @@ export function computeFoodFinancials(
 
   const upfrontEntries = shelfLifeEntries.filter((e) => e.payment_type === "upfront");
 
-  // Total cash paid upfront for batches
-  const upfrontPaidTotal = upfrontEntries.reduce(
-    (sum, e) => sum + (e.initial_qty ?? e.qty) * (e.cost ?? 0),
-    0
-  );
+  // Cash paid upfront, ever — a running ledger, not derived from currently-existing
+  // rows, since a batch's row is deleted once it fully sells through (see
+  // deductShelfLifeFifo). Break-even has to carry across days, not reset with
+  // whatever date range Analytics happens to be showing right now.
+  const upfrontPaidTotal = cumulativeUpfrontPaid;
 
   // Unsold upfront stock still on shelf
   const upfrontRemainingStockValue = upfrontEntries.reduce(
@@ -89,15 +90,17 @@ export function computeFoodFinancials(
       0
     );
 
-  // Break-even target: cash investment in upfront foods
+  // Break-even target: cash investment in upfront foods, measured against
+  // all-time revenue so it's a running "have I earned that cash back yet"
+  // status, unaffected by whichever date range is selected above.
   const breakEvenTarget = upfrontPaidTotal;
-  const breakEvenNeeded = Math.max(0, breakEvenTarget - revenue);
+  const breakEvenNeeded = Math.max(0, breakEvenTarget - allTimeRevenue);
   const breakEvenPercent =
     breakEvenTarget > 0
-      ? Math.min(100, Math.round((revenue / breakEvenTarget) * 100))
+      ? Math.min(100, Math.round((allTimeRevenue / breakEvenTarget) * 100))
       : 100;
-  const breakEvenAchieved = revenue >= breakEvenTarget;
-  const netSurplus = revenue - breakEvenTarget;
+  const breakEvenAchieved = allTimeRevenue >= breakEvenTarget;
+  const netSurplus = allTimeRevenue - breakEvenTarget;
 
   return {
     upfrontPaidTotal,
