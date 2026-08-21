@@ -63,11 +63,17 @@ export async function updateShelfLifeEntry(
 
   const { data: old, error: fetchError } = await supabase
     .from("shelf_life")
-    .select("item, qty")
+    .select("item, qty, stock_deducted")
     .eq("id", id)
     .eq("business_id", businessId)
     .single();
   if (fetchError || !old) throw new Error(fetchError?.message ?? "Entry not found.");
+
+  const todayMY = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const stillExpired = input.expiresAt < todayMY;
+  // Un-expiring a batch the sweep already marked spoiled: put its stock back
+  // and let it re-enter the normal expiry check next time.
+  const unexpiring = old.stock_deducted && !stillExpired;
 
   const { error } = await supabase
     .from("shelf_life")
@@ -79,10 +85,15 @@ export async function updateShelfLifeEntry(
       initial_qty: newQty,
       cost: input.cost,
       payment_type: input.paymentType,
+      ...(unexpiring ? { stock_deducted: false } : {}),
     })
     .eq("id", id)
     .eq("business_id", businessId);
   if (error) throw new Error(error.message);
+
+  if (unexpiring && old.qty > 0) {
+    await supabase.rpc("adjust_menu_stock", { p_name: old.item.trim(), p_delta: old.qty });
+  }
 
   const oldName = old.item.trim();
   const newName = input.item.trim();
@@ -121,14 +132,15 @@ export async function deleteShelfLifeEntry(id: string) {
   // Fetch the entry details before deleting to adjust stock
   const { data: entry } = await supabase
     .from("shelf_life")
-    .select("item, qty")
+    .select("item, qty, stock_deducted")
     .eq("id", id)
     .single();
 
   const { error } = await supabase.from("shelf_life").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
-  if (entry) {
+  // If this batch already expired, the sweep already removed its stock — don't double-subtract.
+  if (entry && !entry.stock_deducted) {
     const { data: menuItem } = await supabase
       .from("menu_items")
       .select("id, stock")

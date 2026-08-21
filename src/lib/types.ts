@@ -43,6 +43,7 @@ export interface ShelfLifeEntry {
   qty: number;
   initial_qty?: number | null;
   cost: number | null;
+  stock_deducted?: boolean;
   created_at: string;
 }
 
