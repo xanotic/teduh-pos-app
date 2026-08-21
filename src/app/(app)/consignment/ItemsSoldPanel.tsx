@@ -70,10 +70,9 @@ export function ItemsSoldPanel({
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
-      ...filtered.flatMap((r) => [
-        `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`,
-        ...r.sales.map((s) => `   • ${fmtDateTime(s.ts, !!range)} — ${s.qty}×`),
-      ]),
+      ...filtered.map(
+        (r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`
+      ),
       "",
       `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
     ];
