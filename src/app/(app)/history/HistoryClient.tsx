@@ -53,6 +53,7 @@ export function HistoryClient({
   const stats = computeStats(transactions);
   const cash = stats.byPayment.find((p) => p.name === "Cash")?.revenue ?? 0;
   const qr = stats.byPayment.find((p) => p.name === "QR Pay")?.revenue ?? 0;
+  const giveaway = stats.byPayment.find((p) => p.name === "Giveaway");
   const dateLabel = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "short",
     year: "numeric",
@@ -70,6 +71,7 @@ export function HistoryClient({
       `🔳 QR Pay: ${fmt(qr)}`,
       `📈 Est. Profit${stats.costPartial ? " (partial)" : ""}: ${stats.hasCost ? fmt(stats.profit) : "— (no cost set)"}`,
       `🧾 Orders: ${stats.orders}`,
+      `🎁 Giveaways: ${giveaway?.count ?? 0}${stats.giveawayCost > 0 ? ` (cost ${fmt(stats.giveawayCost)})` : ""}`,
     ];
     return lines.join("\n");
   }
