@@ -75,16 +75,26 @@ export function ConsignmentClient({
   function handleAssignVendor(name: string, newVendorId: string) {
     setAssigningVendorFor(null);
     if (!newVendorId) return;
+    setError(null);
     startVendorAssignTransition(async () => {
-      await setItemVendor(name, newVendorId);
+      try {
+        await setItemVendor(name, newVendorId);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not assign vendor.");
+      }
     });
   }
 
   const [, startPaymentTypeTransition] = useTransition();
 
   function handleSetPaymentType(name: string, type: "consignment" | "upfront") {
+    setError(null);
     startPaymentTypeTransition(async () => {
-      await setItemPaymentType(name, type);
+      try {
+        await setItemPaymentType(name, type);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not update category.");
+      }
     });
   }
 
@@ -230,6 +240,7 @@ export function ConsignmentClient({
               );
             })}
           </div>
+          {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
 
           {rows.length > 0 && (
             <div className="mt-4 rounded-xl border border-border bg-bg p-3">
