@@ -97,9 +97,16 @@ export default async function ConsignmentPage({
     }
   );
 
-  // Classify each sold item as consignment/upfront/unknown, so the payout
-  // list can default to "everything except known-upfront stock" — same rule
-  // the old auto-fill used.
+  // Classify each sold item as consignment/upfront/unknown. menu_items.payment_type
+  // is the persistent record and takes precedence; the shelf_life/settlement-derived
+  // sets are only a fallback guess for items added before that column existed —
+  // shelf_life rows (and thus their payment_type) get deleted once a batch fully
+  // sells through, which used to make a sold-out item's classification vanish.
+  const menuPaymentTypeMap: Record<string, string> = {};
+  (menuItems ?? []).forEach((m: MenuItem) => {
+    if (m.payment_type) menuPaymentTypeMap[m.name.trim().toLowerCase()] = m.payment_type;
+  });
+
   const consignmentNames = new Set<string>();
   const upfrontNames = new Set<string>();
   (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
@@ -115,6 +122,7 @@ export default async function ConsignmentPage({
 
   function classify(name: string): "consignment" | "upfront" | "unknown" {
     const key = name.trim().toLowerCase();
+    if (menuPaymentTypeMap[key]) return menuPaymentTypeMap[key] as "consignment" | "upfront";
     if (consignmentNames.has(key)) return "consignment";
     if (upfrontNames.has(key)) return "upfront";
     return "unknown";

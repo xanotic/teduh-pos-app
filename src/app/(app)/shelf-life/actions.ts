@@ -44,16 +44,17 @@ export async function addShelfLifeEntry(input: {
       .eq("id", menuItem.id);
   }
 
-  // menu_items.vendor_id is the persistent "who supplies this" record —
-  // shelf_life.vendor_id only tags whichever batch rows exist right now,
+  // menu_items.vendor_id / payment_type are the persistent records — shelf_life's
+  // own vendor_id/payment_type only tag whichever batch rows exist right now,
   // and those get deleted once a batch sells through.
-  if (input.vendorId) {
-    await supabase
-      .from("menu_items")
-      .update({ vendor_id: input.vendorId })
-      .eq("business_id", businessId)
-      .ilike("name", input.item.trim());
-  }
+  await supabase
+    .from("menu_items")
+    .update({
+      payment_type: input.paymentType,
+      ...(input.vendorId ? { vendor_id: input.vendorId } : {}),
+    })
+    .eq("business_id", businessId)
+    .ilike("name", input.item.trim());
 
   // Break-even tracks real cash paid upfront — a running total, since this row
   // itself gets deleted once the batch sells through (see deductShelfLifeFifo).
@@ -162,15 +163,16 @@ export async function updateShelfLifeEntry(
     await adjustStock(newName, newQty);
   }
 
-  // menu_items.vendor_id is the persistent "who supplies this" record —
-  // shelf_life.vendor_id only tags whichever batch rows exist right now.
-  if (input.vendorId) {
-    await supabase
-      .from("menu_items")
-      .update({ vendor_id: input.vendorId })
-      .eq("business_id", businessId)
-      .ilike("name", newName);
-  }
+  // menu_items.vendor_id / payment_type are the persistent records —
+  // shelf_life's own copies only tag whichever batch rows exist right now.
+  await supabase
+    .from("menu_items")
+    .update({
+      payment_type: input.paymentType,
+      ...(input.vendorId ? { vendor_id: input.vendorId } : {}),
+    })
+    .eq("business_id", businessId)
+    .ilike("name", newName);
 
   revalidatePath("/consignment");
   revalidatePath("/shelf-life");

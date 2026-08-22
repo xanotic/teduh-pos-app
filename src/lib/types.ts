@@ -9,6 +9,7 @@ export interface MenuItem {
   cost: number | null;
   stock: number | null;
   vendor_id?: string | null;
+  payment_type?: PaymentType | null;
   created_at: string;
 }
 
