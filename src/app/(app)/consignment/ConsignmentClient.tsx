@@ -40,14 +40,14 @@ export function ConsignmentClient({
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
-  // Everything sold this period is shown, so a wrong Consignment/Upfront tag
-  // can be fixed right here — but only non-upfront items count toward the
-  // payout total (upfront stock is already paid on delivery, so paying it
-  // again here would double-pay the supplier).
-  const payoutCandidates = soldItems;
+  // Upfront items are already paid on delivery — this page is consignment
+  // payout only, so they're left out of the list entirely, not just the
+  // total. Reclassify an item from Shelf Life or Menu if it ends up here
+  // by mistake.
+  const payoutCandidates = soldItems.filter((r) => r.type !== "upfront");
 
   const rows = payoutCandidates
-    .filter((r) => !excluded.has(r.name) && r.type !== "upfront")
+    .filter((r) => !excluded.has(r.name))
     .map((r) => {
       const override = costOverrides[r.name];
       const effectiveCost = r.hasMissingCost ? (override ? parseFloat(override) || 0 : 0) : r.cost;
@@ -147,8 +147,7 @@ export function ConsignmentClient({
         <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex flex-col gap-2">
             {payoutCandidates.map((r) => {
-              const isUpfront = r.type === "upfront";
-              const isExcluded = isUpfront || excluded.has(r.name);
+              const isExcluded = excluded.has(r.name);
               return (
                 <div
                   key={r.name}
@@ -156,25 +155,16 @@ export function ConsignmentClient({
                     isExcluded ? "border-border bg-surface-alt opacity-60" : "border-border bg-bg"
                   }`}
                 >
-                  {isUpfront ? (
-                    <span
-                      className="rounded-md bg-surface px-2 py-1 text-xs font-bold text-ink-muted"
-                      title="Already paid on delivery — not counted in this payout"
-                    >
-                      Paid upfront
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleExclude(r.name)}
-                      className={`rounded-md px-2 py-1 text-xs font-bold ${
-                        isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
-                      }`}
-                      title={isExcluded ? "Include in payout" : "Exclude from payout"}
-                    >
-                      {isExcluded ? "Excluded" : "✓ Included"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleExclude(r.name)}
+                    className={`rounded-md px-2 py-1 text-xs font-bold ${
+                      isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
+                    }`}
+                    title={isExcluded ? "Include in payout" : "Exclude from payout"}
+                  >
+                    {isExcluded ? "Excluded" : "✓ Included"}
+                  </button>
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                     {r.name} <span className="font-normal text-ink-muted">· sold {r.qty}</span>
                   </span>
