@@ -44,6 +44,17 @@ export async function addShelfLifeEntry(input: {
       .eq("id", menuItem.id);
   }
 
+  // menu_items.vendor_id is the persistent "who supplies this" record —
+  // shelf_life.vendor_id only tags whichever batch rows exist right now,
+  // and those get deleted once a batch sells through.
+  if (input.vendorId) {
+    await supabase
+      .from("menu_items")
+      .update({ vendor_id: input.vendorId })
+      .eq("business_id", businessId)
+      .ilike("name", input.item.trim());
+  }
+
   // Break-even tracks real cash paid upfront — a running total, since this row
   // itself gets deleted once the batch sells through (see deductShelfLifeFifo).
   if (input.paymentType === "upfront" && input.cost) {
@@ -54,6 +65,7 @@ export async function addShelfLifeEntry(input: {
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/analytics");
+  revalidatePath("/consignment");
 }
 
 export async function updateShelfLifeEntry(
@@ -150,6 +162,17 @@ export async function updateShelfLifeEntry(
     await adjustStock(newName, newQty);
   }
 
+  // menu_items.vendor_id is the persistent "who supplies this" record —
+  // shelf_life.vendor_id only tags whichever batch rows exist right now.
+  if (input.vendorId) {
+    await supabase
+      .from("menu_items")
+      .update({ vendor_id: input.vendorId })
+      .eq("business_id", businessId)
+      .ilike("name", newName);
+  }
+
+  revalidatePath("/consignment");
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
@@ -213,15 +236,28 @@ export async function uploadVendorQr(vendorId: string, formData: FormData) {
 /** Assigns a vendor to every shelf-life batch matching this item name (case-insensitive) — lets the Consignment payout page attribute an item to a vendor even for batches added before that item had a vendor set. */
 export async function setItemVendor(itemName: string, vendorId: string | null) {
   const { supabase, businessId } = await getBusinessContext();
-  const { error } = await supabase
+  const name = itemName.trim();
+
+  // menu_items.vendor_id is the persistent record — it survives a
+  // consignment item selling completely out, unlike shelf_life rows which
+  // get deleted once a batch sells through (see deductShelfLifeFifo).
+  const { error: menuError } = await supabase
+    .from("menu_items")
+    .update({ vendor_id: vendorId })
+    .eq("business_id", businessId)
+    .ilike("name", name);
+  if (menuError) throw new Error(menuError.message);
+
+  const { error: shelfError } = await supabase
     .from("shelf_life")
     .update({ vendor_id: vendorId })
     .eq("business_id", businessId)
-    .ilike("item", itemName.trim());
-  if (error) throw new Error(error.message);
+    .ilike("item", name);
+  if (shelfError) throw new Error(shelfError.message);
 
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
+  revalidatePath("/menu");
 }
 
 export async function deleteShelfLifeEntry(id: string) {

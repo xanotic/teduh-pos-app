@@ -8,6 +8,7 @@ export interface MenuItem {
   price: number;
   cost: number | null;
   stock: number | null;
+  vendor_id?: string | null;
   created_at: string;
 }
 

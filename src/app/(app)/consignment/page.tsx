@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { ConsignmentSettlement, ShelfLifeEntry, Vendor } from "@/lib/types";
+import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { ConsignmentClient } from "./ConsignmentClient";
 import { ItemsSoldPanel } from "./ItemsSoldPanel";
 
@@ -52,24 +52,30 @@ export default async function ConsignmentPage({
     soldQuery = soldQuery.gte("transactions.ts", start.toISOString()).lt("transactions.ts", end.toISOString());
   }
 
-  const [{ data: settlements }, { data: shelfLifeData }, { data: soldRows }, { data: vendors }] = await Promise.all([
-    supabase
-      .from("consignment_settlements")
-      .select("*, consignment_settlement_items(*)")
-      .eq("business_id", businessId)
-      .order("settled_at", { ascending: false })
-      .limit(20),
-    supabase.from("shelf_life").select("*").eq("business_id", businessId),
-    soldQuery,
-    supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
-  ]);
+  const [{ data: settlements }, { data: shelfLifeData }, { data: soldRows }, { data: vendors }, { data: menuItems }] =
+    await Promise.all([
+      supabase
+        .from("consignment_settlements")
+        .select("*, consignment_settlement_items(*)")
+        .eq("business_id", businessId)
+        .order("settled_at", { ascending: false })
+        .limit(20),
+      supabase.from("shelf_life").select("*").eq("business_id", businessId),
+      soldQuery,
+      supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
+      supabase.from("menu_items").select("*").eq("business_id", businessId),
+    ]);
 
-  // Attribute each item name to whichever vendor most recently supplied it,
-  // so the payout list below can group "who to pay" without needing the
-  // vendor re-picked every time.
+  // menu_items.vendor_id is the persistent "who supplies this" record, so it
+  // takes precedence. shelf_life.vendor_id is only a fallback guess from
+  // whichever batch rows currently exist (those get deleted once a batch
+  // fully sells through, so they can't be relied on alone).
   const itemVendorMap: Record<string, string> = {};
   (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
     if (e.vendor_id) itemVendorMap[e.item.trim().toLowerCase()] = e.vendor_id;
+  });
+  (menuItems ?? []).forEach((m: MenuItem) => {
+    if (m.vendor_id) itemVendorMap[m.name.trim().toLowerCase()] = m.vendor_id;
   });
 
   const soldBreakdownMap: Record<
