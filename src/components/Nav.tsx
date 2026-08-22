@@ -12,11 +12,12 @@ const TABS = [
   { href: "/giveaway", label: "Giveaway" },
   { href: "/shelf-life", label: "Shelf Life" },
   { href: "/consignment", label: "Consignment" },
+  { href: "/restock", label: "Restock" },
   { href: "/misc", label: "Misc" },
   { href: "/menu", label: "Menu" },
 ];
 
-export function Nav({ businessName }: { businessName: string }) {
+export function Nav({ businessName, restockCount = 0 }: { businessName: string; restockCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -38,6 +39,15 @@ export function Nav({ businessName }: { businessName: string }) {
               }`}
             >
               {tab.label}
+              {tab.href === "/restock" && restockCount > 0 && (
+                <span
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                    active ? "bg-white/25 text-white" : "bg-danger-soft text-danger"
+                  }`}
+                >
+                  {restockCount}
+                </span>
+              )}
             </Link>
           );
         })}
