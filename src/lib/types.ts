@@ -33,6 +33,14 @@ export interface Transaction {
 
 export type PaymentType = "consignment" | "upfront";
 
+export interface Vendor {
+  id: string;
+  business_id: string;
+  name: string;
+  qr_url: string | null;
+  created_at: string;
+}
+
 export interface ShelfLifeEntry {
   id: string;
   business_id: string;
@@ -44,6 +52,7 @@ export interface ShelfLifeEntry {
   initial_qty?: number | null;
   cost: number | null;
   stock_deducted?: boolean;
+  vendor_id?: string | null;
   created_at: string;
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry } from "@/lib/types";
+import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { createSettlement, deleteSettlement, markSettlementPaid } from "./actions";
+import { setItemVendor } from "../shelf-life/actions";
 
 interface DraftItem {
   name: string;
@@ -29,12 +30,16 @@ export function ConsignmentClient({
   shelfLifeEntries = [],
   posSalesMap = {},
   lastSettledAt = null,
+  vendors = [],
+  itemVendorMap = {},
 }: {
   settlements: ConsignmentSettlement[];
   menuItems: MenuItem[];
   shelfLifeEntries?: ShelfLifeEntry[];
   posSalesMap?: Record<string, number>;
   lastSettledAt?: string | null;
+  vendors?: Vendor[];
+  itemVendorMap?: Record<string, string>;
 }) {
   const [pending, startTransition] = useTransition();
   const [settledAt, setSettledAt] = useState(nowLocalInput());
@@ -173,6 +178,8 @@ export function ConsignmentClient({
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+
   const rows = items
     .filter((it) => it.name.trim())
     .map((it) => {
@@ -182,6 +189,7 @@ export function ConsignmentClient({
       const cost = it.cost === "" ? null : parseFloat(it.cost) || 0;
       const owed = cost != null ? cost * sold : null;
       const itemType = getItemType(it.name);
+      const vendorId = itemVendorMap[it.name.trim().toLowerCase()] ?? null;
       return {
         name: it.name.trim(),
         delivered,
@@ -191,12 +199,37 @@ export function ConsignmentClient({
         owed,
         soldOut: it.soldOut,
         itemType,
+        vendorId,
       };
     });
 
   const totalOwed = rows.reduce((s, r) => s + (r.owed ?? 0), 0);
   const anyMissingCost = rows.some((r) => r.cost == null);
   const anyUpfrontIncluded = rows.some((r) => r.itemType === "upfront");
+
+  const vendorGroups = useMemo(() => {
+    const groups = new Map<string, { vendor: Vendor | null; rows: typeof rows }>();
+    for (const r of rows) {
+      const key = r.vendorId ?? "none";
+      if (!groups.has(key)) groups.set(key, { vendor: r.vendorId ? vendorById.get(r.vendorId) ?? null : null, rows: [] });
+      groups.get(key)!.rows.push(r);
+    }
+    return Array.from(groups.values())
+      .map((g) => ({ ...g, subtotal: g.rows.reduce((s, r) => s + (r.owed ?? 0), 0) }))
+      .sort((a, b) => (a.vendor ? 0 : 1) - (b.vendor ? 0 : 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, vendorById]);
+
+  const [assigningVendorFor, setAssigningVendorFor] = useState<string | null>(null);
+  const [, startVendorAssignTransition] = useTransition();
+
+  function handleAssignVendor(name: string, newVendorId: string) {
+    setAssigningVendorFor(null);
+    if (!newVendorId) return;
+    startVendorAssignTransition(async () => {
+      await setItemVendor(name, newVendorId);
+    });
+  }
 
   function handleSave() {
     if (!rows.length) return;
@@ -407,12 +440,78 @@ export function ConsignmentClient({
 
         {rows.length > 0 && (
           <div className="mt-4 rounded-xl border border-border bg-bg p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">To pay suppliers</span>
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">To pay, by vendor</span>
               <span className="text-lg font-extrabold text-accent">{fmt(totalOwed)}</span>
             </div>
+
+            <div className="flex flex-col gap-3">
+              {vendorGroups.map((g) => {
+                const groupKey = g.vendor?.id ?? "none";
+                return (
+                  <div key={groupKey} className="rounded-lg border border-border bg-surface p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-ink">{g.vendor ? g.vendor.name : "No vendor assigned"}</span>
+                      <span className="font-extrabold text-ink">{fmt(g.subtotal)}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {g.rows.map((r) => (
+                        <div key={r.name} className="flex items-center justify-between gap-2 text-xs text-ink-muted">
+                          <span className="min-w-0 truncate">
+                            {r.name} · sold {r.sold}
+                          </span>
+                          {!r.vendorId &&
+                            (assigningVendorFor === r.name ? (
+                              <select
+                                autoFocus
+                                onBlur={() => setAssigningVendorFor(null)}
+                                onChange={(e) => handleAssignVendor(r.name, e.target.value)}
+                                className="rounded-md border border-border bg-surface px-1.5 py-0.5 text-[11px]"
+                                defaultValue=""
+                              >
+                                <option value="" disabled>
+                                  Pick vendor…
+                                </option>
+                                {vendors.map((v) => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              vendors.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAssigningVendorFor(r.name)}
+                                  className="rounded-md bg-surface-alt px-1.5 py-0.5 text-[10px] font-bold text-accent"
+                                >
+                                  + Assign vendor
+                                </button>
+                              )
+                            ))}
+                          <span className="flex-none font-semibold text-ink">{r.owed != null ? fmt(r.owed) : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {g.vendor?.qr_url && (
+                      <div className="mt-2.5 flex items-center gap-2.5 rounded-lg border border-accent/40 bg-accent-soft p-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={g.vendor.qr_url} alt={`${g.vendor.name} QR pay code`} className="h-16 w-16 rounded-md object-cover" />
+                        <span className="text-xs font-bold text-accent">📱 Scan to pay {g.vendor.name} — {fmt(g.subtotal)}</span>
+                      </div>
+                    )}
+                    {g.vendor && !g.vendor.qr_url && (
+                      <p className="mt-2 text-[11px] text-ink-muted">
+                        No QR pay code set for {g.vendor.name} yet — add one in Shelf Life → Vendors.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             {anyMissingCost && (
-              <p className="text-xs text-gold">Some items have no cost/unit — their payout isn&apos;t included above.</p>
+              <p className="mt-3 text-xs text-gold">Some items have no cost/unit — their payout isn&apos;t included above.</p>
             )}
             {anyUpfrontIncluded && (
               <p className="mt-1 text-xs text-gold font-semibold">

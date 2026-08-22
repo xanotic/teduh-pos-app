@@ -11,6 +11,7 @@ export async function addShelfLifeEntry(input: {
   paymentType: PaymentType;
   qty: number;
   cost: number | null;
+  vendorId?: string | null;
 }) {
   const { supabase, businessId } = await getBusinessContext();
   const entryQty = input.qty || 1;
@@ -24,6 +25,7 @@ export async function addShelfLifeEntry(input: {
     qty: entryQty,
     initial_qty: entryQty,
     cost: input.cost,
+    vendor_id: input.vendorId || null,
   });
   if (error) throw new Error(error.message);
 
@@ -61,8 +63,10 @@ export async function updateShelfLifeEntry(
     expiresAt: string;
     notes: string;
     qty: number;
+    initialQty?: number;
     cost: number | null;
     paymentType: PaymentType;
+    vendorId?: string | null;
   }
 ) {
   const { supabase, businessId } = await getBusinessContext();
@@ -82,6 +86,14 @@ export async function updateShelfLifeEntry(
   // and let it re-enter the normal expiry check next time.
   const unexpiring = old.stock_deducted && !stillExpired;
 
+  const oldInitial = old.initial_qty ?? old.qty;
+  // Editing "Qty" here is normally a remaining-stock correction (a sale,
+  // a manual recount), not a fresh batch — so the "X / Y left" original
+  // batch size should survive a decrease. Only grow it, either because the
+  // user explicitly set a new original qty, or because the corrected qty
+  // itself now exceeds what we thought the original was.
+  const newInitialQty = input.initialQty != null ? Math.max(1, input.initialQty) : Math.max(oldInitial, newQty);
+
   const { error } = await supabase
     .from("shelf_life")
     .update({
@@ -89,9 +101,10 @@ export async function updateShelfLifeEntry(
       expires_at: input.expiresAt,
       notes: input.notes || null,
       qty: newQty,
-      initial_qty: newQty,
+      initial_qty: newInitialQty,
       cost: input.cost,
       payment_type: input.paymentType,
+      vendor_id: input.vendorId || null,
       ...(unexpiring ? { stock_deducted: false } : {}),
     })
     .eq("id", id)
@@ -104,8 +117,8 @@ export async function updateShelfLifeEntry(
 
   // Break-even's cash-paid ledger only cares about the upfront-priced portion —
   // re-derive both sides so switching payment type or correcting qty/cost stays accurate.
-  const oldUpfrontPaid = old.payment_type === "upfront" ? (old.initial_qty ?? old.qty) * (old.cost ?? 0) : 0;
-  const newUpfrontPaid = input.paymentType === "upfront" ? newQty * (input.cost ?? 0) : 0;
+  const oldUpfrontPaid = old.payment_type === "upfront" ? oldInitial * (old.cost ?? 0) : 0;
+  const newUpfrontPaid = input.paymentType === "upfront" ? newInitialQty * (input.cost ?? 0) : 0;
   const upfrontPaidDelta = newUpfrontPaid - oldUpfrontPaid;
   if (upfrontPaidDelta !== 0) {
     await supabase.rpc("adjust_upfront_paid", { p_delta: upfrontPaidDelta });
@@ -141,6 +154,74 @@ export async function updateShelfLifeEntry(
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/analytics");
+}
+
+export async function addVendor(name: string) {
+  const { supabase, businessId } = await getBusinessContext();
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Vendor name is required.");
+
+  const { data, error } = await supabase
+    .from("vendors")
+    .insert({ business_id: businessId, name: trimmed })
+    .select("id, business_id, name, qr_url, created_at")
+    .single();
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
+  return data;
+}
+
+export async function deleteVendor(id: string) {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase.from("vendors").delete().eq("id", id).eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
+}
+
+export async function uploadVendorQr(vendorId: string, formData: FormData) {
+  const { supabase, businessId } = await getBusinessContext();
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("No image selected.");
+  if (!file.type.startsWith("image/")) throw new Error("QR file must be an image.");
+
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "png";
+  const path = `${businessId}/${vendorId}-${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("vendor-qr")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { data: publicUrlData } = supabase.storage.from("vendor-qr").getPublicUrl(path);
+
+  const { error } = await supabase
+    .from("vendors")
+    .update({ qr_url: publicUrlData.publicUrl })
+    .eq("id", vendorId)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
+}
+
+/** Assigns a vendor to every shelf-life batch matching this item name (case-insensitive) — lets the Consignment payout page attribute an item to a vendor even for batches added before that item had a vendor set. */
+export async function setItemVendor(itemName: string, vendorId: string | null) {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("shelf_life")
+    .update({ vendor_id: vendorId })
+    .eq("business_id", businessId)
+    .ilike("item", itemName.trim());
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
 }
 
 export async function deleteShelfLifeEntry(id: string) {

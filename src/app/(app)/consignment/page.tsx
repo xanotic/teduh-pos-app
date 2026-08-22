@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry } from "@/lib/types";
+import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { ConsignmentClient } from "./ConsignmentClient";
 import { ItemsSoldPanel } from "./ItemsSoldPanel";
 
@@ -42,17 +42,27 @@ export default async function ConsignmentPage({
     soldQuery = soldQuery.gte("transactions.ts", start.toISOString()).lt("transactions.ts", end.toISOString());
   }
 
-  const [{ data: settlements }, { data: menu }, { data: shelfLifeData }, { data: soldRows }] = await Promise.all([
-    supabase
-      .from("consignment_settlements")
-      .select("*, consignment_settlement_items(*)")
-      .eq("business_id", businessId)
-      .order("settled_at", { ascending: false })
-      .limit(20),
-    supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
-    supabase.from("shelf_life").select("*").eq("business_id", businessId),
-    soldQuery,
-  ]);
+  const [{ data: settlements }, { data: menu }, { data: shelfLifeData }, { data: soldRows }, { data: vendors }] =
+    await Promise.all([
+      supabase
+        .from("consignment_settlements")
+        .select("*, consignment_settlement_items(*)")
+        .eq("business_id", businessId)
+        .order("settled_at", { ascending: false })
+        .limit(20),
+      supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
+      supabase.from("shelf_life").select("*").eq("business_id", businessId),
+      soldQuery,
+      supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
+    ]);
+
+  // Attribute each item name to whichever vendor most recently supplied it,
+  // so the payout list below can group "who to pay" without needing the
+  // vendor re-picked on every settlement.
+  const itemVendorMap: Record<string, string> = {};
+  (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
+    if (e.vendor_id) itemVendorMap[e.item.trim().toLowerCase()] = e.vendor_id;
+  });
 
   const lastSettledAt = settlements && settlements.length > 0 ? settlements[0].settled_at : null;
 
@@ -127,6 +137,8 @@ export default async function ConsignmentPage({
         shelfLifeEntries={(shelfLifeData ?? []) as ShelfLifeEntry[]}
         posSalesMap={posSalesMap}
         lastSettledAt={lastSettledAt}
+        vendors={(vendors ?? []) as Vendor[]}
+        itemVendorMap={itemVendorMap}
       />
     </div>
   );
