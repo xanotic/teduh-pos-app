@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { ConsignmentSettlement, MenuItem, ShelfLifeEntry, Vendor } from "@/lib/types";
+import type { ConsignmentSettlement, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { ConsignmentClient } from "./ConsignmentClient";
 import { ItemsSoldPanel } from "./ItemsSoldPanel";
 
@@ -11,6 +11,10 @@ const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function todayInMalaysia(): string {
   return new Date(Date.now() + MY_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function fmtShort(d: string) {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default async function ConsignmentPage({
@@ -25,6 +29,12 @@ export default async function ConsignmentPage({
   const soldRange = isDate(fromParam) && isDate(toParam) ? { from: fromParam!, to: toParam! } : null;
   const soldDate = !soldRange && isDate(dateParam) ? dateParam! : null;
   const effectiveSoldDate = soldDate ?? (soldRange ? null : todayInMalaysia());
+
+  const periodLabel = soldRange
+    ? `${fmtShort(soldRange.from)} – ${fmtShort(soldRange.to)}`
+    : soldDate
+      ? fmtShort(soldDate)
+      : `Today · ${fmtShort(todayInMalaysia())}`;
 
   let soldQuery = supabase
     .from("transaction_items")
@@ -42,45 +52,24 @@ export default async function ConsignmentPage({
     soldQuery = soldQuery.gte("transactions.ts", start.toISOString()).lt("transactions.ts", end.toISOString());
   }
 
-  const [{ data: settlements }, { data: menu }, { data: shelfLifeData }, { data: soldRows }, { data: vendors }] =
-    await Promise.all([
-      supabase
-        .from("consignment_settlements")
-        .select("*, consignment_settlement_items(*)")
-        .eq("business_id", businessId)
-        .order("settled_at", { ascending: false })
-        .limit(20),
-      supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
-      supabase.from("shelf_life").select("*").eq("business_id", businessId),
-      soldQuery,
-      supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
-    ]);
+  const [{ data: settlements }, { data: shelfLifeData }, { data: soldRows }, { data: vendors }] = await Promise.all([
+    supabase
+      .from("consignment_settlements")
+      .select("*, consignment_settlement_items(*)")
+      .eq("business_id", businessId)
+      .order("settled_at", { ascending: false })
+      .limit(20),
+    supabase.from("shelf_life").select("*").eq("business_id", businessId),
+    soldQuery,
+    supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
+  ]);
 
   // Attribute each item name to whichever vendor most recently supplied it,
   // so the payout list below can group "who to pay" without needing the
-  // vendor re-picked on every settlement.
+  // vendor re-picked every time.
   const itemVendorMap: Record<string, string> = {};
   (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
     if (e.vendor_id) itemVendorMap[e.item.trim().toLowerCase()] = e.vendor_id;
-  });
-
-  const lastSettledAt = settlements && settlements.length > 0 ? settlements[0].settled_at : null;
-
-  let query = supabase
-    .from("transaction_items")
-    .select("name, qty, transactions!inner(ts, business_id)")
-    .eq("transactions.business_id", businessId);
-
-  if (lastSettledAt) {
-    query = query.gte("transactions.ts", lastSettledAt);
-  }
-
-  const { data: rawSales } = await query;
-
-  const posSalesMap: Record<string, number> = {};
-  (rawSales ?? []).forEach((row) => {
-    const key = row.name.trim().toLowerCase();
-    posSalesMap[key] = (posSalesMap[key] || 0) + (row.qty || 0);
   });
 
   const soldBreakdownMap: Record<
@@ -102,8 +91,9 @@ export default async function ConsignmentPage({
     }
   );
 
-  // Classify each sold item as consignment/upfront/unknown, same logic as
-  // ConsignmentClient uses for the settlement form's item-type badges.
+  // Classify each sold item as consignment/upfront/unknown, so the payout
+  // list can default to "everything except known-upfront stock" — same rule
+  // the old auto-fill used.
   const consignmentNames = new Set<string>();
   const upfrontNames = new Set<string>();
   (shelfLifeData ?? []).forEach((e: ShelfLifeEntry) => {
@@ -125,7 +115,11 @@ export default async function ConsignmentPage({
   }
 
   const soldBreakdown = Object.values(soldBreakdownMap)
-    .map((r) => ({ ...r, type: classify(r.name) }))
+    .map((r) => ({
+      ...r,
+      type: classify(r.name),
+      vendorId: itemVendorMap[r.name.trim().toLowerCase()] ?? null,
+    }))
     .sort((a, b) => b.qty - a.qty);
 
   return (
@@ -133,12 +127,9 @@ export default async function ConsignmentPage({
       <ItemsSoldPanel breakdown={soldBreakdown} date={soldDate} range={soldRange} todayDate={todayInMalaysia()} />
       <ConsignmentClient
         settlements={(settlements ?? []) as ConsignmentSettlement[]}
-        menuItems={(menu ?? []) as MenuItem[]}
-        shelfLifeEntries={(shelfLifeData ?? []) as ShelfLifeEntry[]}
-        posSalesMap={posSalesMap}
-        lastSettledAt={lastSettledAt}
         vendors={(vendors ?? []) as Vendor[]}
-        itemVendorMap={itemVendorMap}
+        soldItems={soldBreakdown}
+        periodLabel={periodLabel}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { getBusinessContext } from "@/lib/business";
 
 export async function createSettlement(input: {
   settledAt: string;
+  periodLabel?: string;
   items: { name: string; deliveredQty: number; remainingQty: number; cost: number | null }[];
 }) {
   if (!input.items.length) throw new Error("Add at least one item");
@@ -13,7 +14,7 @@ export async function createSettlement(input: {
 
   const { data: settlement, error: settlementError } = await supabase
     .from("consignment_settlements")
-    .insert({ business_id: businessId, settled_at: input.settledAt })
+    .insert({ business_id: businessId, settled_at: input.settledAt, period_label: input.periodLabel || null })
     .select("id")
     .single();
   if (settlementError || !settlement) throw new Error(settlementError?.message ?? "Could not save settlement");

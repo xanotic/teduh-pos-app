@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import type { Vendor } from "@/lib/types";
+import { QrModal } from "@/components/QrModal";
 import { addVendor, deleteVendor, uploadVendorQr } from "./actions";
 
 export function VendorManager({ vendors }: { vendors: Vendor[] }) {
@@ -88,6 +89,7 @@ function VendorRow({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [enlarged, setEnlarged] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -111,7 +113,12 @@ function VendorRow({
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-bg px-3 py-2.5">
       {vendor.qr_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={vendor.qr_url} alt={`${vendor.name} QR pay code`} className="h-12 w-12 rounded-md object-cover" />
+        <img
+          src={vendor.qr_url}
+          alt={`${vendor.name} QR pay code`}
+          onClick={() => setEnlarged(true)}
+          className="h-12 w-12 cursor-zoom-in rounded-md object-cover"
+        />
       ) : (
         <div className="flex h-12 w-12 flex-none items-center justify-center rounded-md bg-surface-alt text-[9px] text-ink-muted">
           No QR
@@ -135,6 +142,9 @@ function VendorRow({
         {confirmDelete ? "✔" : "✕"}
       </button>
       {error && <p className="basis-full text-xs font-semibold text-danger">{error}</p>}
+      {enlarged && vendor.qr_url && (
+        <QrModal url={vendor.qr_url} label={`${vendor.name} QR pay code`} onClose={() => setEnlarged(false)} />
+      )}
     </div>
   );
 }

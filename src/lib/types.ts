@@ -78,6 +78,7 @@ export interface ConsignmentSettlement {
   id: string;
   business_id: string;
   settled_at: string;
+  period_label?: string | null;
   paid: boolean;
   paid_at: string | null;
   created_at: string;
