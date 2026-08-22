@@ -12,12 +12,7 @@ interface SoldRow {
   cost: number;
   hasMissingCost: boolean;
   type: ItemType;
-  vendorName?: string | null;
   sales: { ts: string; qty: number }[];
-}
-
-function rmFmt(n: number) {
-  return "rm" + (Math.round(n * 100) / 100).toFixed(2);
 }
 
 const TYPE_FILTERS: { key: ItemType | "all"; label: string }[] = [
@@ -72,32 +67,15 @@ export function ItemsSoldPanel({
   }
 
   function copyList() {
-    const groups = new Map<string, SoldRow[]>();
-    for (const r of filtered) {
-      const key = r.vendorName ?? "Unassigned";
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(r);
-    }
-    const vendorNames = Array.from(groups.keys()).sort((a, b) => {
-      if (a === "Unassigned") return 1;
-      if (b === "Unassigned") return -1;
-      return a.localeCompare(b);
-    });
-
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
+      ...filtered.map(
+        (r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`
+      ),
+      "",
+      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
     ];
-    for (const vendorName of vendorNames) {
-      const items = groups.get(vendorName)!;
-      lines.push(vendorName);
-      items.forEach((r, i) => {
-        lines.push(`${i + 1}. ${r.name} - ${r.qty} - ${r.hasMissingCost ? "cost not set" : rmFmt(r.cost)}`);
-      });
-      lines.push(`Total: ${rmFmt(items.reduce((s, r) => s + r.cost, 0))}`);
-      lines.push("");
-    }
-    lines.push(`Grand total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`);
     navigator.clipboard.writeText(lines.join("\n"));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

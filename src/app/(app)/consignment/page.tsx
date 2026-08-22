@@ -124,14 +124,8 @@ export default async function ConsignmentPage({
     return "unknown";
   }
 
-  const vendorNameById = new Map((vendors ?? []).map((v) => [v.id, v.name]));
-
   const soldBreakdown = Object.values(soldBreakdownMap)
-    .map((r) => ({
-      ...r,
-      type: classify(r.name),
-      vendorName: vendorNameById.get(itemVendorMap[r.name.trim().toLowerCase()] ?? "") ?? null,
-    }))
+    .map((r) => ({ ...r, type: classify(r.name) }))
     .sort((a, b) => b.qty - a.qty);
 
   return (
