@@ -235,6 +235,27 @@ export async function uploadVendorQr(vendorId: string, formData: FormData) {
   revalidatePath("/consignment");
 }
 
+/**
+ * Reclassifies an item as consignment/upfront from menu_items.payment_type
+ * only — deliberately does NOT touch any current shelf_life batch rows,
+ * since those carry real cash-ledger consequences (see updateShelfLifeEntry's
+ * upfrontPaidDelta) that this quick action has no way to compute correctly.
+ * Use the Shelf Life edit form to change an active batch's payment type.
+ */
+export async function setItemPaymentType(itemName: string, paymentType: PaymentType) {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("menu_items")
+    .update({ payment_type: paymentType })
+    .eq("business_id", businessId)
+    .ilike("name", itemName.trim());
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
+  revalidatePath("/menu");
+}
+
 /** Assigns a vendor to every shelf-life batch matching this item name (case-insensitive) — lets the Consignment payout page attribute an item to a vendor even for batches added before that item had a vendor set. */
 export async function setItemVendor(itemName: string, vendorId: string | null) {
   const { supabase, businessId } = await getBusinessContext();

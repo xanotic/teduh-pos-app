@@ -5,7 +5,7 @@ import type { ConsignmentSettlement, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { QrModal } from "@/components/QrModal";
 import { createSettlement, deleteSettlement, markSettlementPaid } from "./actions";
-import { setItemVendor } from "../shelf-life/actions";
+import { setItemVendor, setItemPaymentType } from "../shelf-life/actions";
 
 type ItemType = "consignment" | "upfront" | "unknown";
 
@@ -40,13 +40,14 @@ export function ConsignmentClient({
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
-  // Everything sold this period counts toward payout by default, except
-  // known-upfront stock (already paid on delivery — paying it again here
-  // would double-pay the supplier).
-  const payoutCandidates = soldItems.filter((r) => r.type !== "upfront");
+  // Everything sold this period is shown, so a wrong Consignment/Upfront tag
+  // can be fixed right here — but only non-upfront items count toward the
+  // payout total (upfront stock is already paid on delivery, so paying it
+  // again here would double-pay the supplier).
+  const payoutCandidates = soldItems;
 
   const rows = payoutCandidates
-    .filter((r) => !excluded.has(r.name))
+    .filter((r) => !excluded.has(r.name) && r.type !== "upfront")
     .map((r) => {
       const override = costOverrides[r.name];
       const effectiveCost = r.hasMissingCost ? (override ? parseFloat(override) || 0 : 0) : r.cost;
@@ -76,6 +77,14 @@ export function ConsignmentClient({
     if (!newVendorId) return;
     startVendorAssignTransition(async () => {
       await setItemVendor(name, newVendorId);
+    });
+  }
+
+  const [, startPaymentTypeTransition] = useTransition();
+
+  function handleSetPaymentType(name: string, type: "consignment" | "upfront") {
+    startPaymentTypeTransition(async () => {
+      await setItemPaymentType(name, type);
     });
   }
 
@@ -128,32 +137,51 @@ export function ConsignmentClient({
         <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
           <div className="flex flex-col gap-2">
             {payoutCandidates.map((r) => {
-              const isExcluded = excluded.has(r.name);
+              const isUpfront = r.type === "upfront";
+              const isExcluded = isUpfront || excluded.has(r.name);
               return (
                 <div
                   key={r.name}
                   className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
-                    isExcluded ? "border-border bg-surface-alt opacity-50" : "border-border bg-bg"
+                    isExcluded ? "border-border bg-surface-alt opacity-60" : "border-border bg-bg"
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleExclude(r.name)}
-                    className={`rounded-md px-2 py-1 text-xs font-bold ${
-                      isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
-                    }`}
-                    title={isExcluded ? "Include in payout" : "Exclude from payout"}
-                  >
-                    {isExcluded ? "Excluded" : "✓ Included"}
-                  </button>
+                  {isUpfront ? (
+                    <span
+                      className="rounded-md bg-surface px-2 py-1 text-xs font-bold text-ink-muted"
+                      title="Already paid on delivery — not counted in this payout"
+                    >
+                      Paid upfront
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => toggleExclude(r.name)}
+                      className={`rounded-md px-2 py-1 text-xs font-bold ${
+                        isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
+                      }`}
+                      title={isExcluded ? "Include in payout" : "Exclude from payout"}
+                    >
+                      {isExcluded ? "Excluded" : "✓ Included"}
+                    </button>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                     {r.name} <span className="font-normal text-ink-muted">· sold {r.qty}</span>
                   </span>
-                  {r.type === "unknown" && (
-                    <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[10px] font-bold text-ink-muted">
-                      not classified
-                    </span>
-                  )}
+                  <select
+                    value={r.type === "unknown" ? "" : r.type}
+                    onChange={(e) => handleSetPaymentType(r.name, e.target.value as "consignment" | "upfront")}
+                    className={`rounded-md border bg-surface px-1.5 py-1 text-[11px] font-bold ${
+                      r.type === "unknown" ? "border-gold text-gold" : "border-border text-ink-muted"
+                    }`}
+                    title="Consignment or Upfront?"
+                  >
+                    <option value="" disabled>
+                      Not set
+                    </option>
+                    <option value="consignment">Consignment</option>
+                    <option value="upfront">Upfront</option>
+                  </select>
                   {!r.vendorId &&
                     !isExcluded &&
                     (assigningVendorFor === r.name ? (
