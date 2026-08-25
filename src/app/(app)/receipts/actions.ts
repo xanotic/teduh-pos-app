@@ -35,6 +35,21 @@ export async function uploadReceipt(formData: FormData) {
   revalidatePath("/receipts");
 }
 
+export async function updateReceipt(id: string, input: { date: string; vendorId: string | null }) {
+  const { supabase, businessId } = await getBusinessContext();
+
+  if (!input.date) throw new Error("Pick a date for this receipt.");
+
+  const { error } = await supabase
+    .from("receipts")
+    .update({ receipt_date: input.date, vendor_id: input.vendorId })
+    .eq("id", id)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/receipts");
+}
+
 export async function deleteReceipt(id: string, imagePath: string) {
   const { supabase, businessId } = await getBusinessContext();
 

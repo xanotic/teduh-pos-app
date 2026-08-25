@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { Vendor } from "@/lib/types";
 import { QrModal } from "@/components/QrModal";
 import { compressImage } from "@/lib/compressImage";
-import { deleteReceipt, uploadReceipt } from "./actions";
+import { deleteReceipt, updateReceipt, uploadReceipt } from "./actions";
 
 interface ReceiptRow {
   id: string;
@@ -27,7 +27,6 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [enlarged, setEnlarged] = useState<ReceiptRow | null>(null);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
@@ -138,45 +137,15 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
               })}
             </h2>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {byDate[d].map((r) => {
-                const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name : null;
-                return (
-                <div key={r.id} className="relative rounded-xl border border-border bg-surface p-1.5">
-                  {r.url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={r.url}
-                      alt={r.note ?? "Receipt"}
-                      onClick={() => setEnlarged(r)}
-                      className="aspect-square w-full cursor-zoom-in rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-alt text-[10px] text-ink-muted">
-                      Unavailable
-                    </div>
-                  )}
-                  {vendorName && (
-                    <p className="mt-1 truncate text-[10px] font-bold text-accent">{vendorName}</p>
-                  )}
-                  {r.note && <p className="truncate text-[10px] text-ink-muted">{r.note}</p>}
-                  <button
-                    onClick={() =>
-                      confirmId === r.id
-                        ? startTransition(async () => {
-                            await deleteReceipt(r.id, r.imagePath);
-                            setConfirmId(null);
-                          })
-                        : setConfirmId(r.id)
-                    }
-                    className={`absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold shadow-sm ${
-                      confirmId === r.id ? "bg-danger text-white" : "bg-surface text-danger"
-                    }`}
-                  >
-                    {confirmId === r.id ? "✔" : "✕"}
-                  </button>
-                </div>
-                );
-              })}
+              {byDate[d].map((r) => (
+                <ReceiptCard
+                  key={r.id}
+                  receipt={r}
+                  vendors={vendors}
+                  vendorName={r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null}
+                  onEnlarge={() => setEnlarged(r)}
+                />
+              ))}
             </div>
           </div>
         ))}
@@ -190,6 +159,122 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
           onClose={() => setEnlarged(null)}
         />
       )}
+    </div>
+  );
+}
+
+function ReceiptCard({
+  receipt,
+  vendors,
+  vendorName,
+  onEnlarge,
+}: {
+  receipt: ReceiptRow;
+  vendors: Vendor[];
+  vendorName: string | null;
+  onEnlarge: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editDate, setEditDate] = useState(receipt.date);
+  const [editVendorId, setEditVendorId] = useState(receipt.vendorId ?? "");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSave() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updateReceipt(receipt.id, { date: editDate, vendorId: editVendorId || null });
+        setEditing(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — try again.");
+      }
+    });
+  }
+
+  return (
+    <div className="relative rounded-xl border border-border bg-surface p-1.5">
+      {receipt.url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={receipt.url}
+          alt={receipt.note ?? "Receipt"}
+          onClick={onEnlarge}
+          className="aspect-square w-full cursor-zoom-in rounded-lg object-cover"
+        />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-alt text-[10px] text-ink-muted">
+          Unavailable
+        </div>
+      )}
+
+      {editing ? (
+        <div className="mt-1 flex flex-col gap-1">
+          <input
+            type="date"
+            value={editDate}
+            onChange={(e) => setEditDate(e.target.value)}
+            className="w-full rounded-md border border-border bg-bg px-1 py-0.5 text-[10px]"
+          />
+          <select
+            value={editVendorId}
+            onChange={(e) => setEditVendorId(e.target.value)}
+            className="w-full rounded-md border border-border bg-bg px-1 py-0.5 text-[10px]"
+          >
+            <option value="">— None —</option>
+            {vendors.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-1">
+            <button
+              disabled={pending}
+              onClick={handleSave}
+              className="flex-1 rounded-md bg-accent px-1 py-0.5 text-[10px] font-bold text-white disabled:opacity-50"
+            >
+              {pending ? "…" : "Save"}
+            </button>
+            <button
+              disabled={pending}
+              onClick={() => setEditing(false)}
+              className="flex-1 rounded-md border border-border px-1 py-0.5 text-[10px] font-bold text-ink-muted"
+            >
+              Cancel
+            </button>
+          </div>
+          {error && <p className="text-[9px] font-semibold text-danger">{error}</p>}
+        </div>
+      ) : (
+        <>
+          {vendorName && <p className="mt-1 truncate text-[10px] font-bold text-accent">{vendorName}</p>}
+          {receipt.note && <p className="truncate text-[10px] text-ink-muted">{receipt.note}</p>}
+          <button
+            onClick={() => setEditing(true)}
+            className="absolute right-8 top-2 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted shadow-sm"
+          >
+            ✎
+          </button>
+        </>
+      )}
+
+      <button
+        onClick={() =>
+          confirmDelete
+            ? startTransition(async () => {
+                await deleteReceipt(receipt.id, receipt.imagePath);
+                setConfirmDelete(false);
+              })
+            : setConfirmDelete(true)
+        }
+        className={`absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold shadow-sm ${
+          confirmDelete ? "bg-danger text-white" : "bg-surface text-danger"
+        }`}
+      >
+        {confirmDelete ? "✔" : "✕"}
+      </button>
     </div>
   );
 }
