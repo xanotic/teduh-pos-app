@@ -15,6 +15,7 @@ const TABS = [
   { href: "/consignment", label: "Consignment" },
   { href: "/restock", label: "Restock" },
   { href: "/misc", label: "Misc" },
+  { href: "/receipts", label: "Receipts" },
   { href: "/menu", label: "Menu" },
 ];
 
