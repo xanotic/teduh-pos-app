@@ -192,14 +192,15 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
 
 function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
   const [pending, startTransition] = useTransition();
+  const restockable = items.filter((it) => it.payment_type == null);
   const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(items.map((it) => [it.id, it.stock == null ? "" : String(it.stock)]))
+    Object.fromEntries(restockable.map((it) => [it.id, it.stock == null ? "" : String(it.stock)]))
   );
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   function handleSave() {
-    const updates = items
+    const updates = restockable
       .map((it) => {
         const raw = values[it.id] ?? "";
         const newStock = raw === "" ? null : parseInt(raw, 10) || 0;
@@ -231,10 +232,16 @@ function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void
     <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
       <p className="mb-3 text-xs text-ink-muted">
         Type the new stock for each item, Tab to the next box, then hit Save all once at the end —
-        no need to click in and out of each field.
+        no need to click in and out of each field. Items tracked in Shelf Life aren&apos;t listed here —
+        add a new batch on the Shelf Life tab instead when your supplier delivers.
       </p>
+      {restockable.length === 0 && (
+        <p className="mb-3 text-xs font-semibold text-ink-muted">
+          No plain-stock items yet — everything here is tracked via Shelf Life.
+        </p>
+      )}
       <div className="flex flex-col gap-1.5">
-        {items.map((it) => (
+        {restockable.map((it) => (
           <div key={it.id} className="flex items-center justify-between gap-3 rounded-lg bg-bg px-3 py-1.5">
             <span className="text-sm text-ink">{it.name}</span>
             <input
@@ -338,27 +345,42 @@ function MenuRow({
           }`}
           title={item.cost == null ? "No cost set — Est. Profit on Analytics excludes this item's sales" : undefined}
         />
-        <input
-          type="number"
-          step="1"
-          min="0"
-          defaultValue={item.stock ?? ""}
-          placeholder="Stock"
-          onBlur={(e) => {
-            const el = e.target;
-            save(
-              { stock: el.value === "" ? null : parseInt(el.value, 10) || 0 },
-              () => (el.value = item.stock != null ? String(item.stock) : "")
-            );
-          }}
-          className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
-            item.stock === 0
-              ? "border-danger text-danger"
-              : item.stock != null && item.stock <= 3
-                ? "border-gold text-gold"
-                : "border-border"
-          }`}
-        />
+        {item.payment_type != null ? (
+          <span
+            title="This item is tracked in Shelf Life — add a new batch there when your supplier delivers, don't edit the number here"
+            className={`w-20 flex-none rounded-md border border-dashed px-2 py-1 text-right text-sm ${
+              item.stock === 0
+                ? "border-danger text-danger"
+                : item.stock != null && item.stock <= 3
+                  ? "border-gold text-gold"
+                  : "border-border text-ink-muted"
+            }`}
+          >
+            {item.stock ?? 0} 🔗
+          </span>
+        ) : (
+          <input
+            type="number"
+            step="1"
+            min="0"
+            defaultValue={item.stock ?? ""}
+            placeholder="Stock"
+            onBlur={(e) => {
+              const el = e.target;
+              save(
+                { stock: el.value === "" ? null : parseInt(el.value, 10) || 0 },
+                () => (el.value = item.stock != null ? String(item.stock) : "")
+              );
+            }}
+            className={`w-20 flex-none rounded-md border px-2 py-1 text-right text-sm ${
+              item.stock === 0
+                ? "border-danger text-danger"
+                : item.stock != null && item.stock <= 3
+                  ? "border-gold text-gold"
+                  : "border-border"
+            }`}
+          />
+        )}
         <button
           onClick={onDeleteClick}
           className={`flex-none rounded-md px-2 py-1 text-xs font-bold ${

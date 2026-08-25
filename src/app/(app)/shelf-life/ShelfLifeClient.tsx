@@ -66,6 +66,8 @@ export function ShelfLifeClient({
     (e) => e.payment_type === tab && (vendorFilter === "all" || (e.vendor_id ?? "none") === vendorFilter)
   );
   const sorted = [...filtered].sort((a, b) => daysLeft(a.expires_at) - daysLeft(b.expires_at));
+  const expiredEntries = sorted.filter((e) => status(daysLeft(e.expires_at)) === "expired");
+  const activeEntries = sorted.filter((e) => status(daysLeft(e.expires_at)) !== "expired");
 
   const lostAlready = sorted
     .filter((e) => status(daysLeft(e.expires_at)) === "expired")
@@ -255,95 +257,160 @@ export function ShelfLifeClient({
         </button>
       </form>
 
-      <div className="flex flex-col gap-2">
-        {sorted.map((e) => {
-          const d = daysLeft(e.expires_at);
-          const s = status(d);
-          const label =
-            s === "expired"
-              ? `Expired ${Math.abs(d)}d ago`
-              : s === "soon"
-                ? d === 0
-                  ? "Expires today"
-                  : `${d}d left`
-                : `${d}d left`;
-          const loss = e.payment_type === "upfront" && e.cost != null ? e.cost * e.qty : null;
+      {expiredEntries.length > 0 && (
+        <div className="mb-2">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-danger">
+            Expired ({expiredEntries.length})
+          </h2>
+          <div className="flex flex-col gap-2">
+            {expiredEntries.map((e) =>
+              renderRow(e, {
+                editingId,
+                setEditingId,
+                confirmId,
+                setConfirmId,
+                startTransition,
+                vendorById,
+                menuItems,
+                vendors,
+              })
+            )}
+          </div>
+        </div>
+      )}
 
-          if (editingId === e.id) {
-            return (
-              <EditRow
-                key={e.id}
-                entry={e}
-                menuItems={menuItems}
-                vendors={vendors}
-                onCancel={() => setEditingId(null)}
-                onSaved={() => setEditingId(null)}
-              />
-            );
-          }
-
-          const vendorName = e.vendor_id ? vendorById.get(e.vendor_id)?.name : null;
-
-          return (
-            <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                {e.initial_qty != null && e.initial_qty > e.qty ? (
-                  <>
-                    <span className="font-extrabold text-accent">{e.qty}</span>
-                    <span className="text-ink-muted font-normal"> / {e.initial_qty} left · </span>
-                  </>
-                ) : (
-                  <span className="font-extrabold text-accent">{e.qty}× </span>
-                )}
-                {e.item}
-              </span>
-              {vendorName && (
-                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
-                  {vendorName}
-                </span>
-              )}
-              {e.notes && <span className="basis-full text-xs text-ink-muted">{e.notes}</span>}
-              <span className="text-xs text-ink-muted">
-                {new Date(e.expires_at + "T00:00:00").toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </span>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_STYLE[s]}`}>{label}</span>
-              {loss != null && s === "expired" && (
-                <span className="rounded-full bg-danger-soft px-2.5 py-1 text-xs font-bold text-danger">
-                  Loss: {fmt(loss)}
-                </span>
-              )}
-              <button
-                onClick={() => setEditingId(e.id)}
-                className="rounded-md bg-surface-alt px-2 py-1 text-xs font-bold text-ink-muted"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() =>
-                  confirmId === e.id
-                    ? startTransition(async () => {
-                        await deleteShelfLifeEntry(e.id);
-                        setConfirmId(null);
-                      })
-                    : setConfirmId(e.id)
-                }
-                className={`rounded-md px-2 py-1 text-xs font-bold ${
-                  confirmId === e.id ? "bg-danger text-white" : "bg-surface-alt text-danger"
-                }`}
-              >
-                {confirmId === e.id ? "✔" : "✕"}
-              </button>
-            </div>
-          );
-        })}
-        {sorted.length === 0 && (
-          <p className="text-sm text-ink-muted">No {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries yet.</p>
+      <div className="mb-2 mt-4">
+        {expiredEntries.length > 0 && (
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
+            Not expired ({activeEntries.length})
+          </h2>
         )}
+        <div className="flex flex-col gap-2">
+          {activeEntries.map((e) =>
+            renderRow(e, {
+              editingId,
+              setEditingId,
+              confirmId,
+              setConfirmId,
+              startTransition,
+              vendorById,
+              menuItems,
+              vendors,
+            })
+          )}
+          {sorted.length === 0 && (
+            <p className="text-sm text-ink-muted">
+              No {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries yet.
+            </p>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function renderRow(
+  e: ShelfLifeEntry,
+  {
+    editingId,
+    setEditingId,
+    confirmId,
+    setConfirmId,
+    startTransition,
+    vendorById,
+    menuItems,
+    vendors,
+  }: {
+    editingId: string | null;
+    setEditingId: (id: string | null) => void;
+    confirmId: string | null;
+    setConfirmId: (id: string | null) => void;
+    startTransition: (fn: () => Promise<void>) => void;
+    vendorById: Map<string, Vendor>;
+    menuItems: MenuItem[];
+    vendors: Vendor[];
+  }
+) {
+  const d = daysLeft(e.expires_at);
+  const s = status(d);
+  const label =
+    s === "expired"
+      ? `Expired ${Math.abs(d)}d ago`
+      : s === "soon"
+        ? d === 0
+          ? "Expires today"
+          : `${d}d left`
+        : `${d}d left`;
+  const loss = e.payment_type === "upfront" && e.cost != null ? e.cost * e.qty : null;
+
+  if (editingId === e.id) {
+    return (
+      <EditRow
+        key={e.id}
+        entry={e}
+        menuItems={menuItems}
+        vendors={vendors}
+        onCancel={() => setEditingId(null)}
+        onSaved={() => setEditingId(null)}
+      />
+    );
+  }
+
+  const vendorName = e.vendor_id ? vendorById.get(e.vendor_id)?.name : null;
+
+  return (
+    <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+        {e.initial_qty != null && e.initial_qty > e.qty ? (
+          <>
+            <span className="font-extrabold text-accent">{e.qty}</span>
+            <span className="text-ink-muted font-normal"> / {e.initial_qty} left · </span>
+          </>
+        ) : (
+          <span className="font-extrabold text-accent">{e.qty}× </span>
+        )}
+        {e.item}
+      </span>
+      {vendorName && (
+        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+          {vendorName}
+        </span>
+      )}
+      {e.notes && <span className="basis-full text-xs text-ink-muted">{e.notes}</span>}
+      <span className="text-xs text-ink-muted">
+        {new Date(e.expires_at + "T00:00:00").toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })}
+      </span>
+      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_STYLE[s]}`}>{label}</span>
+      {loss != null && s === "expired" && (
+        <span className="rounded-full bg-danger-soft px-2.5 py-1 text-xs font-bold text-danger">
+          Loss: {fmt(loss)}
+        </span>
+      )}
+      <button
+        onClick={() => setEditingId(e.id)}
+        className="rounded-md bg-surface-alt px-2 py-1 text-xs font-bold text-ink-muted"
+      >
+        Edit
+      </button>
+      <button
+        onClick={() =>
+          confirmId === e.id
+            ? startTransition(async () => {
+                await deleteShelfLifeEntry(e.id);
+                setConfirmId(null);
+              })
+            : setConfirmId(e.id)
+        }
+        className={`rounded-md px-2 py-1 text-xs font-bold ${
+          confirmId === e.id ? "bg-danger text-white" : "bg-surface-alt text-danger"
+        }`}
+      >
+        {confirmId === e.id ? "✔" : "✕"}
+      </button>
     </div>
   );
 }

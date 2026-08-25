@@ -2,14 +2,16 @@ import { getBusinessContext } from "@/lib/business";
 import type { MenuItem, Transaction } from "@/lib/types";
 import { CatalogCart } from "@/components/CatalogCart";
 import { VoidableList } from "@/components/VoidableList";
+import { withLiveStock } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
 export default async function GiveawayPage() {
   const { supabase, businessId } = await getBusinessContext();
 
-  const [{ data: items }, { data: giveaways }] = await Promise.all([
+  const [{ data: items }, { data: shelfLife }, { data: giveaways }] = await Promise.all([
     supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+    supabase.from("shelf_life").select("item, qty").eq("business_id", businessId),
     supabase
       .from("transactions")
       .select("*, transaction_items(*)")
@@ -19,6 +21,8 @@ export default async function GiveawayPage() {
       .limit(30),
   ]);
 
+  const liveItems = withLiveStock((items ?? []) as MenuItem[], shelfLife ?? []);
+
   return (
     <div>
       <h1 className="text-xl font-bold text-ink">Giveaway</h1>
@@ -26,7 +30,7 @@ export default async function GiveawayPage() {
         Free items for a customer — you pay the till the full price yourself, so the drawer still
         balances at the end of the day.
       </p>
-      <CatalogCart items={(items ?? []) as MenuItem[]} mode="giveaway" />
+      <CatalogCart items={liveItems} mode="giveaway" />
 
       <div className="mt-8">
         <h2 className="mb-3 text-sm font-bold text-ink">Recent Giveaways</h2>
