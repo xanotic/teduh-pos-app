@@ -11,7 +11,7 @@ export default async function SellPage() {
 
   const [{ data: items }, { data: shelfLife }, { data: todayTxns }, { data: happyHourData }] = await Promise.all([
     supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
-    supabase.from("shelf_life").select("item, qty").eq("business_id", businessId),
+    supabase.from("shelf_life").select("item, qty, expires_at").eq("business_id", businessId),
     supabase
       .from("transactions")
       .select("total, ts")

@@ -22,7 +22,7 @@ export default async function StockPage() {
 
   const [{ data: items }, { data: shelfLife }, { data: vendors }, { data: soldRows }] = await Promise.all([
     supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
-    supabase.from("shelf_life").select("item, qty, vendor_id").eq("business_id", businessId),
+    supabase.from("shelf_life").select("item, qty, vendor_id, expires_at").eq("business_id", businessId),
     supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
     supabase
       .from("transaction_items")
