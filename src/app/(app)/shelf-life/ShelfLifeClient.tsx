@@ -60,6 +60,7 @@ export function ShelfLifeClient({
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [vendorFilter, setVendorFilter] = useState<string>("all");
+  const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "not_expired">("all");
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -165,6 +166,34 @@ export function ShelfLifeClient({
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Show:</span>
+        <button
+          onClick={() => setExpiryFilter("all")}
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+            expiryFilter === "all" ? "bg-accent text-white" : "bg-surface-alt text-ink-muted"
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setExpiryFilter("not_expired")}
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+            expiryFilter === "not_expired" ? "bg-accent text-white" : "bg-surface-alt text-ink-muted"
+          }`}
+        >
+          Not expired
+        </button>
+        <button
+          onClick={() => setExpiryFilter("expired")}
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+            expiryFilter === "expired" ? "bg-accent text-white" : "bg-surface-alt text-ink-muted"
+          }`}
+        >
+          Expired
+        </button>
+      </div>
+
       {tab === "upfront" && (lostAlready > 0 || atRisk > 0) && (
         <div className="mb-4 grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-danger bg-danger-soft p-3">
@@ -265,7 +294,7 @@ export function ShelfLifeClient({
         </button>
       </form>
 
-      {expiredEntries.length > 0 && (
+      {expiryFilter !== "not_expired" && expiredEntries.length > 0 && (
         <div className="mb-2">
           <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-danger">
             Expired ({expiredEntries.length})
@@ -287,32 +316,41 @@ export function ShelfLifeClient({
         </div>
       )}
 
-      <div className="mb-2 mt-4">
-        {expiredEntries.length > 0 && (
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
-            Not expired ({activeEntries.length})
-          </h2>
-        )}
-        <div className="flex flex-col gap-2">
-          {activeEntries.map((e) =>
-            renderRow(e, {
-              editingId,
-              setEditingId,
-              confirmId,
-              setConfirmId,
-              startTransition,
-              vendorById,
-              menuItems,
-              vendors,
-            })
+      {expiryFilter !== "expired" && (
+        <div className="mb-2 mt-4">
+          {expiryFilter === "all" && expiredEntries.length > 0 && (
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
+              Not expired ({activeEntries.length})
+            </h2>
           )}
-          {sorted.length === 0 && (
-            <p className="text-sm text-ink-muted">
-              No {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries yet.
-            </p>
-          )}
+          <div className="flex flex-col gap-2">
+            {activeEntries.map((e) =>
+              renderRow(e, {
+                editingId,
+                setEditingId,
+                confirmId,
+                setConfirmId,
+                startTransition,
+                vendorById,
+                menuItems,
+                vendors,
+              })
+            )}
+            {activeEntries.length === 0 && (
+              <p className="text-sm text-ink-muted">
+                No {expiryFilter === "not_expired" ? "not-expired " : ""}
+                {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {expiryFilter === "expired" && expiredEntries.length === 0 && (
+        <p className="text-sm text-ink-muted">
+          No expired {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries.
+        </p>
+      )}
     </div>
   );
 }

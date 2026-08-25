@@ -52,7 +52,7 @@ export function StockClient({
       <h1 className="text-xl font-bold text-ink">Stock Overview</h1>
       <p className="mb-4 text-sm text-ink-muted">
         {dateLabel} · {totalSoldToday} item{totalSoldToday === 1 ? "" : "s"} sold today · read-only —
-        to change stock, use Menu or Shelf Life.
+        to change stock, use Shelf Life.
       </p>
 
       <input
