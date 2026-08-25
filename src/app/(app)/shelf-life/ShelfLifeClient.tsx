@@ -56,6 +56,7 @@ export function ShelfLifeClient({
   const [cost, setCost] = useState("");
   const [costTouched, setCostTouched] = useState(false);
   const [vendorId, setVendorId] = useState("");
+  const [vendorTouched, setVendorTouched] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [vendorFilter, setVendorFilter] = useState<string>("all");
@@ -78,10 +79,9 @@ export function ShelfLifeClient({
 
   function handleItemChange(v: string) {
     setItem(v);
-    if (!costTouched) {
-      const match = menuItems.find((m) => m.name.toLowerCase() === v.trim().toLowerCase());
-      if (match?.cost != null) setCost(String(match.cost));
-    }
+    const match = menuItems.find((m) => m.name.toLowerCase() === v.trim().toLowerCase());
+    if (!costTouched && match?.cost != null) setCost(String(match.cost));
+    if (!vendorTouched) setVendorId(match?.vendor_id ?? "");
   }
 
   function handleAdd(e: React.FormEvent) {
@@ -104,6 +104,7 @@ export function ShelfLifeClient({
       setCost("");
       setCostTouched(false);
       setVendorId("");
+      setVendorTouched(false);
     });
   }
 
@@ -240,7 +241,14 @@ export function ShelfLifeClient({
         </div>
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Vendor</label>
-          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="input">
+          <select
+            value={vendorId}
+            onChange={(e) => {
+              setVendorId(e.target.value);
+              setVendorTouched(true);
+            }}
+            className="input"
+          >
             <option value="">— None —</option>
             {vendors.map((v) => (
               <option key={v.id} value={v.id}>
