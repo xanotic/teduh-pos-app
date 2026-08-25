@@ -10,6 +10,7 @@ const TABS = [
   { href: "/history", label: "History" },
   { href: "/analytics", label: "Analytics" },
   { href: "/giveaway", label: "Giveaway" },
+  { href: "/stock", label: "Stock" },
   { href: "/shelf-life", label: "Shelf Life" },
   { href: "/consignment", label: "Consignment" },
   { href: "/restock", label: "Restock" },
