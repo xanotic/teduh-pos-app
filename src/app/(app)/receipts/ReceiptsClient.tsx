@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import type { Vendor } from "@/lib/types";
 import { QrModal } from "@/components/QrModal";
 import { compressImage } from "@/lib/compressImage";
 import { deleteReceipt, uploadReceipt } from "./actions";
@@ -9,6 +10,7 @@ interface ReceiptRow {
   id: string;
   date: string;
   note: string | null;
+  vendorId: string | null;
   imagePath: string;
   url: string | null;
 }
@@ -18,14 +20,17 @@ function todayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
+export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; vendors: Vendor[] }) {
   const [date, setDate] = useState(todayLocal());
   const [note, setNote] = useState("");
+  const [vendorId, setVendorId] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [enlarged, setEnlarged] = useState<ReceiptRow | null>(null);
+
+  const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -39,11 +44,13 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
       fd.set("file", compressed);
       fd.set("date", date);
       fd.set("note", note);
+      fd.set("vendorId", vendorId);
       setCompressing(false);
       startTransition(async () => {
         try {
           await uploadReceipt(fd);
           setNote("");
+          setVendorId("");
         } catch (err) {
           setError(err instanceof Error ? err.message : "Upload failed.");
         }
@@ -68,10 +75,23 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
       </p>
 
       <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Date</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Vendor (optional)
+            </label>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="input">
+              <option value="">— None —</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -80,7 +100,7 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Kak Azie delivery"
+              placeholder="e.g. delivery slip"
               className="input"
             />
           </div>
@@ -118,7 +138,9 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
               })}
             </h2>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {byDate[d].map((r) => (
+              {byDate[d].map((r) => {
+                const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name : null;
+                return (
                 <div key={r.id} className="relative rounded-xl border border-border bg-surface p-1.5">
                   {r.url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -133,7 +155,10 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
                       Unavailable
                     </div>
                   )}
-                  {r.note && <p className="mt-1 truncate text-[10px] text-ink-muted">{r.note}</p>}
+                  {vendorName && (
+                    <p className="mt-1 truncate text-[10px] font-bold text-accent">{vendorName}</p>
+                  )}
+                  {r.note && <p className="truncate text-[10px] text-ink-muted">{r.note}</p>}
                   <button
                     onClick={() =>
                       confirmId === r.id
@@ -150,7 +175,8 @@ export function ReceiptsClient({ receipts }: { receipts: ReceiptRow[] }) {
                     {confirmId === r.id ? "✔" : "✕"}
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

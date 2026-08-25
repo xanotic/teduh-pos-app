@@ -9,6 +9,7 @@ export async function uploadReceipt(formData: FormData) {
   const file = formData.get("file");
   const receiptDate = formData.get("date");
   const note = formData.get("note");
+  const vendorId = formData.get("vendorId");
 
   if (!(file instanceof File) || file.size === 0) throw new Error("No image selected.");
   if (!file.type.startsWith("image/")) throw new Error("Receipt must be an image.");
@@ -26,6 +27,7 @@ export async function uploadReceipt(formData: FormData) {
     business_id: businessId,
     receipt_date: receiptDate,
     note: typeof note === "string" && note.trim() ? note.trim() : null,
+    vendor_id: typeof vendorId === "string" && vendorId ? vendorId : null,
     image_path: path,
   });
   if (error) throw new Error(error.message);
