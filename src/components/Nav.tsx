@@ -13,6 +13,7 @@ const TABS = [
   { href: "/stock", label: "Stock" },
   { href: "/shelf-life", label: "Shelf Life" },
   { href: "/consignment", label: "Consignment" },
+  { href: "/upfront-payout", label: "Upfront Payout" },
   { href: "/restock", label: "Restock" },
   { href: "/misc", label: "Misc" },
   { href: "/receipts", label: "Receipts" },

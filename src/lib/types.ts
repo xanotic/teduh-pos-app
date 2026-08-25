@@ -87,6 +87,17 @@ export interface ConsignmentSettlement {
   consignment_settlement_items: ConsignmentSettlementItem[];
 }
 
+export interface UpfrontPayout {
+  id: string;
+  business_id: string;
+  vendor_id: string | null;
+  amount: number;
+  note: string | null;
+  paid: boolean;
+  paid_at: string | null;
+  created_at: string;
+}
+
 export interface MiscExpense {
   id: string;
   business_id: string;
