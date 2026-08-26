@@ -55,8 +55,6 @@ export function ShelfLifeClient({
   const [qty, setQty] = useState("1");
   const [cost, setCost] = useState("");
   const [costTouched, setCostTouched] = useState(false);
-  const [vendorId, setVendorId] = useState("");
-  const [vendorTouched, setVendorTouched] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [vendorFilter, setVendorFilter] = useState<string>("all");
@@ -78,16 +76,23 @@ export function ShelfLifeClient({
     .filter((e) => status(daysLeft(e.expires_at)) === "soon")
     .reduce((s, e) => s + (e.cost ?? 0) * e.qty, 0);
 
+  const matchedItem = useMemo(
+    () => menuItems.find((m) => m.name.trim().toLowerCase() === item.trim().toLowerCase()) ?? null,
+    [menuItems, item]
+  );
+  const matchVendorName = matchedItem?.vendor_id ? vendorById.get(matchedItem.vendor_id)?.name : null;
+  const categoryMismatch = !!matchedItem && matchedItem.payment_type != null && matchedItem.payment_type !== tab;
+  const canAdd = !!matchedItem && matchedItem.payment_type === tab;
+
   function handleItemChange(v: string) {
     setItem(v);
     const match = menuItems.find((m) => m.name.toLowerCase() === v.trim().toLowerCase());
     if (!costTouched && match?.cost != null) setCost(String(match.cost));
-    if (!vendorTouched) setVendorId(match?.vendor_id ?? "");
   }
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!item.trim() || !date) return;
+    if (!item.trim() || !date || !canAdd) return;
     startTransition(async () => {
       await addShelfLifeEntry({
         item: item.trim(),
@@ -96,7 +101,7 @@ export function ShelfLifeClient({
         paymentType: tab,
         qty: parseInt(qty, 10) || 1,
         cost: cost === "" ? null : parseFloat(cost) || 0,
-        vendorId: vendorId || null,
+        vendorId: matchedItem?.vendor_id ?? null,
       });
       setItem("");
       setDate("");
@@ -104,8 +109,6 @@ export function ShelfLifeClient({
       setQty("1");
       setCost("");
       setCostTouched(false);
-      setVendorId("");
-      setVendorTouched(false);
     });
   }
 
@@ -268,26 +271,34 @@ export function ShelfLifeClient({
             className="input"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Vendor</label>
-          <select
-            value={vendorId}
-            onChange={(e) => {
-              setVendorId(e.target.value);
-              setVendorTouched(true);
-            }}
-            className="input"
-          >
-            <option value="">— None —</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
+        <div className="col-span-2 sm:col-span-7">
+          {!item.trim() ? (
+            <p className="text-xs text-ink-muted">
+              Supply type and vendor come from Menu — pick an existing item above.
+            </p>
+          ) : !matchedItem ? (
+            <p className="text-xs font-semibold text-gold">
+              &quot;{item.trim()}&quot; isn&apos;t in Menu yet — add it there first (with its supply type and
+              vendor) before adding a batch.
+            </p>
+          ) : matchedItem.payment_type == null ? (
+            <p className="text-xs font-semibold text-gold">
+              {matchedItem.name} has no supply type set — set it to Consignment or Upfront on the Menu tab first.
+            </p>
+          ) : categoryMismatch ? (
+            <p className="text-xs font-semibold text-gold">
+              {matchedItem.name} is set as <strong>{TABS.find((t) => t.key === matchedItem.payment_type)?.label}</strong> on
+              Menu — switch to that tab above to add this batch, or change its supply type on Menu.
+            </p>
+          ) : (
+            <p className="text-xs text-ink-muted">
+              Vendor: <strong className="text-ink">{matchVendorName ?? "None set"}</strong> — change on Menu if
+              wrong.
+            </p>
+          )}
         </div>
         <button
-          disabled={pending}
+          disabled={pending || !canAdd || !date}
           className="col-span-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50 sm:col-span-7"
         >
           Add to {TABS.find((t) => t.key === tab)?.label}
@@ -481,9 +492,10 @@ function EditRow({
   const [qty, setQty] = useState(String(entry.qty));
   const [initialQty, setInitialQty] = useState(String(entry.initial_qty ?? entry.qty));
   const [cost, setCost] = useState(entry.cost != null ? String(entry.cost) : "");
-  const [paymentType, setPaymentType] = useState<PaymentType>(entry.payment_type);
-  const [vendorId, setVendorId] = useState(entry.vendor_id ?? "");
   const [error, setError] = useState<string | null>(null);
+
+  const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+  const vendorName = entry.vendor_id ? vendorById.get(entry.vendor_id)?.name : null;
 
   function handleSave() {
     if (!item.trim() || !date) return;
@@ -497,8 +509,8 @@ function EditRow({
           qty: parseInt(qty, 10) || 1,
           initialQty: parseInt(initialQty, 10) || undefined,
           cost: cost === "" ? null : parseFloat(cost) || 0,
-          paymentType,
-          vendorId: vendorId || null,
+          paymentType: entry.payment_type,
+          vendorId: entry.vendor_id ?? null,
         });
         onSaved();
       } catch (e) {
@@ -509,25 +521,10 @@ function EditRow({
 
   return (
     <div className="rounded-xl border border-accent bg-surface p-3">
-      <div className="mb-3">
-        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-          Payment type
-        </label>
-        <div className="flex gap-1 rounded-xl bg-surface-alt p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setPaymentType(t.key)}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-bold ${
-                paymentType === t.key ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <p className="mb-3 text-xs text-ink-muted">
+        {TABS.find((t) => t.key === entry.payment_type)?.label} · Vendor: <strong className="text-ink">{vendorName ?? "None set"}</strong> —
+        change supply type or vendor on the Menu tab.
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
         <div className="col-span-2">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Item</label>
@@ -578,17 +575,6 @@ function EditRow({
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Notes</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input" />
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Vendor</label>
-          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="input">
-            <option value="">— None —</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
       <div className="mt-3 flex gap-2">

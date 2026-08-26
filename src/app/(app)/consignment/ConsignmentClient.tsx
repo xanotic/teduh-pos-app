@@ -5,7 +5,6 @@ import type { ConsignmentSettlement, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { QrModal } from "@/components/QrModal";
 import { createSettlement, deleteSettlement, markSettlementPaid } from "./actions";
-import { setItemVendor, setItemPaymentType } from "../shelf-life/actions";
 
 type ItemType = "consignment" | "upfront" | "unknown";
 
@@ -34,9 +33,7 @@ export function ConsignmentClient({
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [costOverrides, setCostOverrides] = useState<Record<string, string>>({});
-  const [assigningVendorFor, setAssigningVendorFor] = useState<string | null>(null);
   const [enlargedQr, setEnlargedQr] = useState<{ url: string; label: string } | null>(null);
-  const [, startVendorAssignTransition] = useTransition();
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -71,32 +68,6 @@ export function ConsignmentClient({
   }, [rows, vendorById]);
 
   const alreadySettledThisPeriod = settlements.some((s) => s.period_label === periodLabel);
-
-  function handleAssignVendor(name: string, newVendorId: string) {
-    setAssigningVendorFor(null);
-    if (!newVendorId) return;
-    setError(null);
-    startVendorAssignTransition(async () => {
-      try {
-        await setItemVendor(name, newVendorId);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not assign vendor.");
-      }
-    });
-  }
-
-  const [, startPaymentTypeTransition] = useTransition();
-
-  function handleSetPaymentType(name: string, type: "consignment" | "upfront") {
-    setError(null);
-    startPaymentTypeTransition(async () => {
-      try {
-        await setItemPaymentType(name, type);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update category.");
-      }
-    });
-  }
 
   function toggleExclude(name: string) {
     setExcluded((prev) => {
@@ -168,50 +139,19 @@ export function ConsignmentClient({
                   <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
                     {r.name} <span className="font-normal text-ink-muted">· sold {r.qty}</span>
                   </span>
-                  <select
-                    value={r.type === "unknown" ? "" : r.type}
-                    onChange={(e) => handleSetPaymentType(r.name, e.target.value as "consignment" | "upfront")}
-                    className={`rounded-md border bg-surface px-1.5 py-1 text-[11px] font-bold ${
-                      r.type === "unknown" ? "border-gold text-gold" : "border-border text-ink-muted"
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                      r.type === "unknown" ? "bg-surface-alt text-gold" : "bg-accent-soft text-accent"
                     }`}
-                    title="Consignment or Upfront?"
+                    title="Set on the Menu tab"
                   >
-                    <option value="" disabled>
-                      Not set
-                    </option>
-                    <option value="consignment">Consignment</option>
-                    <option value="upfront">Upfront</option>
-                  </select>
-                  {!r.vendorId &&
-                    !isExcluded &&
-                    (assigningVendorFor === r.name ? (
-                      <select
-                        autoFocus
-                        onBlur={() => setAssigningVendorFor(null)}
-                        onChange={(e) => handleAssignVendor(r.name, e.target.value)}
-                        className="rounded-md border border-border bg-surface px-1.5 py-1 text-xs"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>
-                          Pick vendor…
-                        </option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      vendors.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setAssigningVendorFor(r.name)}
-                          className="rounded-md bg-surface-alt px-2 py-1 text-[11px] font-bold text-accent"
-                        >
-                          + Assign vendor
-                        </button>
-                      )
-                    ))}
+                    {r.type === "unknown" ? "Not set — fix on Menu" : r.type === "consignment" ? "Consignment" : "Upfront"}
+                  </span>
+                  {!r.vendorId && !isExcluded && (
+                    <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-bold text-ink-muted">
+                      No vendor — set on Menu
+                    </span>
+                  )}
                   {r.hasMissingCost ? (
                     <input
                       type="number"

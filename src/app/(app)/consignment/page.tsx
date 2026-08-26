@@ -138,7 +138,13 @@ export default async function ConsignmentPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <ItemsSoldPanel breakdown={soldBreakdown} date={soldDate} range={soldRange} todayDate={todayInMalaysia()} />
+      <ItemsSoldPanel
+        breakdown={soldBreakdown}
+        vendors={(vendors ?? []) as Vendor[]}
+        date={soldDate}
+        range={soldRange}
+        todayDate={todayInMalaysia()}
+      />
       <ConsignmentClient
         settlements={(settlements ?? []) as ConsignmentSettlement[]}
         vendors={(vendors ?? []) as Vendor[]}

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getBusinessContext } from "@/lib/business";
+import type { PaymentType } from "@/lib/types";
 
 export async function addMenuItem(input: {
   name: string;
@@ -9,6 +10,8 @@ export async function addMenuItem(input: {
   price: number;
   cost: number | null;
   stock: number | null;
+  paymentType?: PaymentType | null;
+  vendorId?: string | null;
 }) {
   const { supabase, businessId } = await getBusinessContext();
   const { error } = await supabase.from("menu_items").insert({
@@ -18,16 +21,28 @@ export async function addMenuItem(input: {
     price: input.price,
     cost: input.cost,
     stock: input.stock,
+    payment_type: input.paymentType ?? null,
+    vendor_id: input.vendorId ?? null,
   });
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/giveaway");
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
 }
 
 export async function updateMenuItem(
   id: string,
-  patch: { name?: string; category?: string; price?: number; cost?: number | null; stock?: number | null }
+  patch: {
+    name?: string;
+    category?: string;
+    price?: number;
+    cost?: number | null;
+    stock?: number | null;
+    payment_type?: PaymentType | null;
+    vendor_id?: string | null;
+  }
 ) {
   const { supabase, businessId } = await getBusinessContext();
   const cleanPatch = { ...patch };
@@ -37,7 +52,7 @@ export async function updateMenuItem(
     .update(cleanPatch)
     .eq("id", id)
     .eq("business_id", businessId)
-    .select("id, name, category, price, cost, stock")
+    .select("id, name, category, price, cost, stock, payment_type, vendor_id")
     .single();
   if (error) throw new Error(error.message);
   if (!data) {
@@ -56,6 +71,8 @@ export async function updateMenuItem(
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/giveaway");
+  revalidatePath("/shelf-life");
+  revalidatePath("/consignment");
 }
 
 export async function bulkUpdateStock(updates: { id: string; stock: number | null }[]) {

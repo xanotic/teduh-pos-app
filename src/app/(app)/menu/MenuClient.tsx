@@ -1,17 +1,24 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { MenuItem } from "@/lib/types";
+import type { MenuItem, PaymentType, Vendor } from "@/lib/types";
 import { addMenuItem, bulkUpdateStock, deleteMenuItem, updateMenuItem } from "./actions";
 import { importLegacyBackup } from "./importActions";
 
-export function MenuClient({ items }: { items: MenuItem[] }) {
+const SUPPLY_LABEL: Record<PaymentType, string> = {
+  consignment: "Consignment",
+  upfront: "Upfront",
+};
+
+export function MenuClient({ items, vendors = [] }: { items: MenuItem[]; vendors?: Vendor[] }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
+  const [paymentType, setPaymentType] = useState<"" | PaymentType>("");
+  const [vendorId, setVendorId] = useState("");
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [importText, setImportText] = useState("");
   const [importPending, startImport] = useTransition();
@@ -35,12 +42,16 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
         price: parseFloat(price) || 0,
         cost: cost === "" ? null : parseFloat(cost) || 0,
         stock: stock === "" ? null : parseInt(stock, 10) || 0,
+        paymentType: paymentType || null,
+        vendorId: vendorId || null,
       });
       setName("");
       setCategory("");
       setPrice("");
       setCost("");
       setStock("");
+      setPaymentType("");
+      setVendorId("");
     });
   }
 
@@ -115,6 +126,23 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
             className="input"
           />
         </Field>
+        <Field label="Supply type">
+          <select value={paymentType} onChange={(e) => setPaymentType(e.target.value as "" | PaymentType)} className="input">
+            <option value="">Not tracked</option>
+            <option value="consignment">Consignment</option>
+            <option value="upfront">Upfront</option>
+          </select>
+        </Field>
+        <Field label="Vendor">
+          <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="input">
+            <option value="">— None —</option>
+            {vendors.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         <button
           disabled={pending}
           className="col-span-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-strong disabled:opacity-50 sm:col-span-6"
@@ -122,6 +150,10 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
           Add item
         </button>
       </form>
+      <p className="-mt-4 mb-6 text-xs text-ink-muted">
+        Supply type and vendor are set here only — this is what Shelf Life and Consignment use to know
+        who supplies an item and how it&apos;s paid for.
+      </p>
 
       {Object.keys(byCategory)
         .sort()
@@ -133,6 +165,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                 <MenuRow
                   key={it.id}
                   item={it}
+                  vendors={vendors}
                   confirming={confirmId === it.id}
                   onDeleteClick={() =>
                     confirmId === it.id
@@ -271,10 +304,12 @@ function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void
 
 function MenuRow({
   item,
+  vendors,
   confirming,
   onDeleteClick,
 }: {
   item: MenuItem;
+  vendors: Vendor[];
   confirming: boolean;
   onDeleteClick: () => void;
 }) {
@@ -381,6 +416,35 @@ function MenuRow({
             }`}
           />
         )}
+        <select
+          defaultValue={item.payment_type ?? ""}
+          onChange={(e) => {
+            const v = e.target.value as "" | PaymentType;
+            save({ payment_type: v || null }, () => {});
+          }}
+          className="flex-none rounded-md border border-border bg-bg px-1.5 py-1 text-[11px] font-bold text-ink-muted"
+          title="Supply type — Consignment or Upfront?"
+        >
+          <option value="">Not tracked</option>
+          <option value="consignment">Consignment</option>
+          <option value="upfront">Upfront</option>
+        </select>
+        <select
+          defaultValue={item.vendor_id ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            save({ vendor_id: v || null }, () => {});
+          }}
+          className="flex-none rounded-md border border-border bg-bg px-1.5 py-1 text-[11px] text-ink-muted"
+          title="Vendor"
+        >
+          <option value="">No vendor</option>
+          {vendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
         <button
           onClick={onDeleteClick}
           className={`flex-none rounded-md px-2 py-1 text-xs font-bold ${

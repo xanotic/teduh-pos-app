@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fmt } from "@/lib/format";
+import type { Vendor } from "@/lib/types";
 
 type ItemType = "consignment" | "upfront" | "unknown";
 
@@ -12,6 +13,7 @@ interface SoldRow {
   cost: number;
   hasMissingCost: boolean;
   type: ItemType;
+  vendorId: string | null;
   sales: { ts: string; qty: number }[];
 }
 
@@ -29,11 +31,13 @@ const TYPE_BADGE: Record<ItemType, string> = {
 
 export function ItemsSoldPanel({
   breakdown,
+  vendors = [],
   date,
   range,
   todayDate,
 }: {
   breakdown: SoldRow[];
+  vendors?: Vendor[];
   date: string | null;
   range: { from: string; to: string } | null;
   todayDate: string;
@@ -44,6 +48,8 @@ export function ItemsSoldPanel({
   const [typeFilter, setTypeFilter] = useState<ItemType | "all">("all");
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
   const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
@@ -67,13 +73,26 @@ export function ItemsSoldPanel({
   }
 
   function copyList() {
+    const groups = new Map<string, { vendorName: string | null; rows: SoldRow[] }>();
+    for (const r of filtered) {
+      const key = r.vendorId ?? "none";
+      if (!groups.has(key)) groups.set(key, { vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
+      groups.get(key)!.rows.push(r);
+    }
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      if (!a.vendorName) return 1;
+      if (!b.vendorName) return -1;
+      return a.vendorName.localeCompare(b.vendorName);
+    });
+
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
-      ...filtered.map(
-        (r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`
-      ),
-      "",
+      ...sortedGroups.flatMap((g) => [
+        `— ${g.vendorName ?? "No vendor"} —`,
+        ...g.rows.map((r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`),
+        "",
+      ]),
       `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
     ];
     navigator.clipboard.writeText(lines.join("\n"));
