@@ -79,11 +79,18 @@ export function ItemsSoldPanel({
       if (!groups.has(key)) groups.set(key, { vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
       groups.get(key)!.rows.push(r);
     }
-    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-      if (!a.vendorName) return 1;
-      if (!b.vendorName) return -1;
-      return a.vendorName.localeCompare(b.vendorName);
-    });
+    const sortedGroups = Array.from(groups.values())
+      .map((g) => ({
+        ...g,
+        subtotalQty: g.rows.reduce((s, r) => s + r.qty, 0),
+        subtotalCost: g.rows.reduce((s, r) => s + r.cost, 0),
+        anyMissingCost: g.rows.some((r) => r.hasMissingCost),
+      }))
+      .sort((a, b) => {
+        if (!a.vendorName) return 1;
+        if (!b.vendorName) return -1;
+        return a.vendorName.localeCompare(b.vendorName);
+      });
 
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
@@ -91,6 +98,7 @@ export function ItemsSoldPanel({
       ...sortedGroups.flatMap((g) => [
         `— ${g.vendorName ?? "No vendor"} —`,
         ...g.rows.map((r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`),
+        `Subtotal: ${g.subtotalQty} item${g.subtotalQty === 1 ? "" : "s"} · ${g.anyMissingCost ? `${fmt(g.subtotalCost)}+` : fmt(g.subtotalCost)}`,
         "",
       ]),
       `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
