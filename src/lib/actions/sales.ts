@@ -4,6 +4,14 @@ import { revalidatePath } from "next/cache";
 import { getBusinessContext } from "@/lib/business";
 import type { CartLine, PaymentMethod } from "@/lib/types";
 
+// Malaysia is UTC+8 with no DST — same explicit-offset approach used across
+// business.ts/analytics/consignment, since Vercel functions run in UTC.
+const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function todayInMalaysia(): string {
+  return new Date(Date.now() + MY_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 async function deductShelfLifeFifo(
   supabase: any,
   businessId: string,
@@ -12,11 +20,17 @@ async function deductShelfLifeFifo(
 ) {
   if (qtyToDeduct <= 0) return;
 
+  // Only ever deduct from batches that are still counted in the live stock
+  // number (see withLiveStock) — an expired batch keeps its leftover qty
+  // until the nightly sweep, but selling more should never reach into that
+  // invisible qty, or the on-screen count won't move even though a real
+  // (visible) batch should have been the one to shrink.
   const { data: batches } = await supabase
     .from("shelf_life")
     .select("id, qty, expires_at, payment_type")
     .eq("business_id", businessId)
     .ilike("item", itemName.trim())
+    .gte("expires_at", todayInMalaysia())
     .order("expires_at", { ascending: true })
     .order("payment_type", { ascending: false });
 
@@ -55,9 +69,15 @@ async function restoreShelfLife(
     .order("expires_at", { ascending: false });
 
   if (batches && batches.length > 0) {
+    const today = todayInMalaysia();
+    const active = batches.filter((b: any) => b.expires_at >= today);
+    // Restoring a voided sale should land back on a batch that's actually
+    // still visible in the live stock count — only fall back to an expired
+    // one if that's genuinely all that's left, so the qty isn't lost outright.
+    const pool = active.length > 0 ? active : batches;
     // Prefer adding back to a batch that was partially depleted (qty < initial_qty)
     const targetBatch =
-      batches.find((b: any) => b.initial_qty != null && b.qty < b.initial_qty) || batches[0];
+      pool.find((b: any) => b.initial_qty != null && b.qty < b.initial_qty) || pool[0];
     const currentQty = targetBatch.qty || 0;
     const newQty = currentQty + qtyToRestore;
     const patch: Record<string, any> = { qty: newQty };
