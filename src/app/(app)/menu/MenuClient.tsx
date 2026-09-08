@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { MenuItem, PaymentType, Vendor } from "@/lib/types";
-import { addMenuItem, bulkUpdateStock, deleteMenuItem, updateMenuItem } from "./actions";
+import { addMenuItem, bulkUpdateStock, deleteMenuItem, resetAllStock, updateMenuItem } from "./actions";
 import { importLegacyBackup } from "./importActions";
 
 const SUPPLY_LABEL: Record<PaymentType, string> = {
@@ -225,12 +225,33 @@ export function MenuClient({ items, vendors = [] }: { items: MenuItem[]; vendors
 
 function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
   const [pending, startTransition] = useTransition();
+  const [resetPending, startResetTransition] = useTransition();
   const restockable = items.filter((it) => it.payment_type == null);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(restockable.map((it) => [it.id, it.stock == null ? "" : String(it.stock)]))
   );
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  function handleReset() {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    setConfirmReset(false);
+    setError(null);
+    startResetTransition(async () => {
+      try {
+        await resetAllStock();
+        setValues(Object.fromEntries(restockable.map((it) => [it.id, "0"])));
+        setSavedMsg("All stock reset to 0.");
+        setTimeout(() => setSavedMsg(null), 2500);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Reset failed — try again.");
+      }
+    });
+  }
 
   function handleSave() {
     const updates = restockable
@@ -296,6 +317,33 @@ function QuickRestock({ items, onDone }: { items: MenuItem[]; onDone: () => void
       >
         {pending ? "Saving…" : "Save all"}
       </button>
+
+      {restockable.length > 0 && (
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            disabled={resetPending}
+            onClick={handleReset}
+            className={`flex-1 rounded-xl py-2.5 text-sm font-bold disabled:opacity-50 ${
+              confirmReset ? "bg-danger text-white" : "border border-danger text-danger"
+            }`}
+          >
+            {resetPending
+              ? "Resetting…"
+              : confirmReset
+                ? "Tap again to confirm — reset ALL to 0"
+                : "Reset all stock to 0"}
+          </button>
+          {confirmReset && (
+            <button
+              onClick={() => setConfirmReset(false)}
+              className="flex-none rounded-xl border border-border px-4 py-2.5 text-sm font-bold text-ink-muted"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
+
       {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
       {savedMsg && <p className="mt-2 text-xs font-semibold text-success">{savedMsg}</p>}
     </div>

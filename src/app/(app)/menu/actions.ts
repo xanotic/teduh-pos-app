@@ -98,6 +98,24 @@ export async function bulkUpdateStock(updates: { id: string; stock: number | nul
   revalidatePath("/giveaway");
 }
 
+// Only plain-stock items (payment_type null) — Shelf Life items' stock is
+// computed live from their batches (see withLiveStock), so zeroing
+// menu_items.stock for those would do nothing visible and just leave a
+// stale number behind for whenever they stop being tracked.
+export async function resetAllStock() {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("menu_items")
+    .update({ stock: 0 })
+    .eq("business_id", businessId)
+    .is("payment_type", null)
+    .not("stock", "is", null);
+  if (error) throw new Error(error.message);
+  revalidatePath("/menu");
+  revalidatePath("/sell");
+  revalidatePath("/giveaway");
+}
+
 export async function deleteMenuItem(id: string) {
   const { supabase } = await getBusinessContext();
   const { error } = await supabase.from("menu_items").delete().eq("id", id);
