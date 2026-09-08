@@ -212,6 +212,48 @@ export async function uploadVendorQr(vendorId: string, formData: FormData) {
   revalidatePath("/consignment");
 }
 
+/**
+ * Wipes every current (not-yet-expired) batch for one item — the Shelf Life
+ * equivalent of "reset stock to 0" for an item whose number can't be typed
+ * into directly (it's computed live from these batches, see withLiveStock).
+ * Use for wastage/breakage/a manual recount to zero, not a normal sale.
+ */
+export async function resetItemBatches(itemName: string) {
+  const { supabase, businessId } = await getBusinessContext();
+  const name = itemName.trim();
+  const todayMY = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const { data: batches } = await supabase
+    .from("shelf_life")
+    .select("id, qty, initial_qty, cost, payment_type")
+    .eq("business_id", businessId)
+    .ilike("item", name)
+    .gte("expires_at", todayMY);
+
+  if (!batches || batches.length === 0) return;
+
+  const { error } = await supabase
+    .from("shelf_life")
+    .delete()
+    .in("id", batches.map((b) => b.id));
+  if (error) throw new Error(error.message);
+
+  // Give back the cash-paid ledger for any upfront batches wiped out here —
+  // same accounting as deleting a single entry (see deleteShelfLifeEntry).
+  const upfrontPaid = batches
+    .filter((b) => b.payment_type === "upfront" && b.cost)
+    .reduce((s, b) => s + (b.initial_qty ?? b.qty) * (b.cost ?? 0), 0);
+  if (upfrontPaid) {
+    await supabase.rpc("adjust_upfront_paid", { p_delta: -upfrontPaid });
+  }
+
+  revalidatePath("/shelf-life");
+  revalidatePath("/menu");
+  revalidatePath("/sell");
+  revalidatePath("/giveaway");
+  revalidatePath("/analytics");
+}
+
 export async function deleteShelfLifeEntry(id: string) {
   const { supabase, businessId } = await getBusinessContext();
 

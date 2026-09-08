@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { MenuItem, PaymentType, Vendor } from "@/lib/types";
 import { addMenuItem, bulkUpdateStock, deleteMenuItem, resetAllStock, updateMenuItem } from "./actions";
+import { resetItemBatches } from "../shelf-life/actions";
 import { importLegacyBackup } from "./importActions";
 
 const SUPPLY_LABEL: Record<PaymentType, string> = {
@@ -363,6 +364,8 @@ function MenuRow({
 }) {
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [resetPending, startResetTransition] = useTransition();
+  const [confirmZero, setConfirmZero] = useState(false);
 
   function save(patch: Parameters<typeof updateMenuItem>[1], revert: () => void) {
     setError(null);
@@ -372,6 +375,22 @@ function MenuRow({
       } catch (e) {
         setError(e instanceof Error ? e.message : "Save failed — try again.");
         revert();
+      }
+    });
+  }
+
+  function handleZero() {
+    if (!confirmZero) {
+      setConfirmZero(true);
+      return;
+    }
+    setConfirmZero(false);
+    setError(null);
+    startResetTransition(async () => {
+      try {
+        await resetItemBatches(item.name);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Reset failed — try again.");
       }
     });
   }
@@ -441,7 +460,21 @@ function MenuRow({
           >
             {item.stock ?? 0} 🔗
           </span>
-        ) : (
+        ) : null}
+        {item.payment_type != null && (item.stock ?? 0) > 0 && (
+          <button
+            type="button"
+            disabled={resetPending}
+            onClick={handleZero}
+            title="Wipes all current Shelf Life batches for this item — use for wastage/breakage, not a normal sale"
+            className={`flex-none rounded-md px-2 py-1 text-[11px] font-bold disabled:opacity-50 ${
+              confirmZero ? "bg-danger text-white" : "bg-surface-alt text-danger"
+            }`}
+          >
+            {resetPending ? "…" : confirmZero ? "Confirm reset to 0" : "Reset to 0"}
+          </button>
+        )}
+        {item.payment_type == null && (
           <input
             type="number"
             step="1"
