@@ -13,6 +13,11 @@ interface ReceiptRow {
   vendorId: string | null;
   imagePath: string;
   url: string | null;
+  uploadedAt: string;
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function todayLocal() {
@@ -174,7 +179,7 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
       {enlarged && enlarged.url && (
         <QrModal
           url={enlarged.url}
-          label={enlarged.note ?? new Date(enlarged.date + "T00:00:00").toLocaleDateString()}
+          label={`${enlarged.note ? enlarged.note + " · " : ""}Uploaded ${fmtTime(enlarged.uploadedAt)}`}
           onClose={() => setEnlarged(null)}
         />
       )}
@@ -270,6 +275,7 @@ function ReceiptCard({
         <>
           {vendorName && <p className="mt-1 truncate text-[10px] font-bold text-accent">{vendorName}</p>}
           {receipt.note && <p className="truncate text-[10px] text-ink-muted">{receipt.note}</p>}
+          <p className="truncate text-[10px] text-ink-muted">{fmtTime(receipt.uploadedAt)}</p>
           <button
             onClick={() => setEditing(true)}
             className="absolute right-8 top-2 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-muted shadow-sm"

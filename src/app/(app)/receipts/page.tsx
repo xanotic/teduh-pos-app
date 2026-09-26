@@ -31,6 +31,7 @@ export default async function ReceiptsPage() {
     vendorId: r.vendor_id as string | null,
     imagePath: r.image_path as string,
     url: urlByPath.get(r.image_path) ?? null,
+    uploadedAt: r.created_at as string,
   }));
 
   return <ReceiptsClient receipts={rows} vendors={(vendors ?? []) as Vendor[]} />;
