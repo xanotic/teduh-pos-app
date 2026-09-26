@@ -48,8 +48,29 @@ export function ItemsSoldPanel({
   const [typeFilter, setTypeFilter] = useState<ItemType | "all">("all");
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copyVendor, setCopyVendor] = useState<string>("all");
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+
+  const activePeriod: "daily" | "weekly" | "monthly" | "custom" = range
+    ? weekBounds(todayDate).from === range.from && todayDate === range.to
+      ? "weekly"
+      : monthBounds(todayDate).from === range.from && todayDate === range.to
+        ? "monthly"
+        : "custom"
+    : !date
+      ? "daily"
+      : "custom";
+
+  function goWeekly() {
+    const { from } = weekBounds(todayDate);
+    goRange(from, todayDate);
+  }
+
+  function goMonthly() {
+    const { from } = monthBounds(todayDate);
+    goRange(from, todayDate);
+  }
 
   const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
@@ -73,13 +94,13 @@ export function ItemsSoldPanel({
   }
 
   function copyList() {
-    const groups = new Map<string, { vendorName: string | null; rows: SoldRow[] }>();
+    const groups = new Map<string, { key: string; vendorName: string | null; rows: SoldRow[] }>();
     for (const r of filtered) {
       const key = r.vendorId ?? "none";
-      if (!groups.has(key)) groups.set(key, { vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
+      if (!groups.has(key)) groups.set(key, { key, vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
       groups.get(key)!.rows.push(r);
     }
-    const sortedGroups = Array.from(groups.values())
+    let sortedGroups = Array.from(groups.values())
       .map((g) => ({
         ...g,
         subtotalQty: g.rows.reduce((s, r) => s + r.qty, 0),
@@ -92,16 +113,23 @@ export function ItemsSoldPanel({
         return a.vendorName.localeCompare(b.vendorName);
       });
 
+    if (copyVendor !== "all") {
+      sortedGroups = sortedGroups.filter((g) => g.key === copyVendor);
+    }
+
+    const copiedQty = sortedGroups.reduce((s, g) => s + g.subtotalQty, 0);
+    const copiedCost = sortedGroups.reduce((s, g) => s + g.subtotalCost, 0);
+
     const lines = [
       `📦 Items Sold — ${label}${typeFilter !== "all" ? ` (${TYPE_FILTERS.find((t) => t.key === typeFilter)?.label})` : ""}`,
       "",
-      ...sortedGroups.flatMap((g) => [
-        `— ${g.vendorName ?? "No vendor"} —`,
+      ...sortedGroups.flatMap((g, i) => [
+        `${i + 1}. ${g.vendorName ?? "No vendor"}`,
         ...g.rows.map((r) => `${r.qty}× ${r.name} — ${r.hasMissingCost ? "cost not set" : fmt(r.cost)}`),
         `Subtotal: ${g.subtotalQty} item${g.subtotalQty === 1 ? "" : "s"} · ${g.anyMissingCost ? `${fmt(g.subtotalCost)}+` : fmt(g.subtotalCost)}`,
         "",
       ]),
-      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalCost)}`,
+      `Total: ${copiedQty} item${copiedQty === 1 ? "" : "s"} · ${fmt(copiedCost)}`,
     ];
     navigator.clipboard.writeText(lines.join("\n"));
     setCopied(true);
@@ -116,14 +144,32 @@ export function ItemsSoldPanel({
           <p className="text-xs text-ink-muted">One-click view of what actually sold on the POS.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => router.push("/consignment")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-              !date && !range ? "bg-accent text-white" : "border border-border text-ink-muted"
-            }`}
-          >
-            Today
-          </button>
+          <div className="flex gap-1 rounded-lg bg-surface-alt p-1">
+            <button
+              onClick={() => router.push("/consignment")}
+              className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                activePeriod === "daily" ? "bg-accent text-white" : "text-ink-muted"
+              }`}
+            >
+              Daily
+            </button>
+            <button
+              onClick={goWeekly}
+              className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                activePeriod === "weekly" ? "bg-accent text-white" : "text-ink-muted"
+              }`}
+            >
+              Weekly
+            </button>
+            <button
+              onClick={goMonthly}
+              className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                activePeriod === "monthly" ? "bg-accent text-white" : "text-ink-muted"
+              }`}
+            >
+              Monthly
+            </button>
+          </div>
           <input
             type="date"
             value={date ?? ""}
@@ -174,13 +220,31 @@ export function ItemsSoldPanel({
             </button>
           ))}
         </div>
-        <button
-          onClick={copyList}
-          disabled={filtered.length === 0}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted disabled:opacity-40"
-        >
-          {copied ? "Copied ✓" : "📋 Copy list"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {vendors.length > 0 && (
+            <select
+              value={copyVendor}
+              onChange={(e) => setCopyVendor(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink-muted"
+              title="Copy list for a specific vendor only"
+            >
+              <option value="all">All vendors</option>
+              {vendors.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+              <option value="none">No vendor</option>
+            </select>
+          )}
+          <button
+            onClick={copyList}
+            disabled={filtered.length === 0}
+            className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted disabled:opacity-40"
+          >
+            {copied ? "Copied ✓" : "📋 Copy list"}
+          </button>
+        </div>
       </div>
 
       {filtered.length > 0 ? (
@@ -243,6 +307,17 @@ export function ItemsSoldPanel({
       )}
     </div>
   );
+}
+
+function weekBounds(todayDate: string) {
+  const d = new Date(todayDate + "T00:00:00");
+  d.setDate(d.getDate() - 6);
+  return { from: d.toISOString().slice(0, 10) };
+}
+
+function monthBounds(todayDate: string) {
+  const d = new Date(todayDate + "T00:00:00");
+  return { from: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01` };
 }
 
 function fmtShort(d: string) {

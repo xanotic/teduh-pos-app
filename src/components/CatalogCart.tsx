@@ -56,13 +56,11 @@ export function CatalogCart({
       showToast("Set a price for this item first (Menu tab)");
       return;
     }
+    // stock === 0 is caught by the disabled grid button before this ever runs —
+    // this only warns when adding a 2nd+ unit past a low (but nonzero) count.
     const existing = cart.find((l) => l.itemId === item.id);
-    if (item.stock != null && (existing?.qty ?? 0) >= item.stock) {
-      showToast(
-        item.stock === 0
-          ? `${item.name} is marked out of stock — adding anyway`
-          : `Only ${item.stock} counted in stock for ${item.name} — adding anyway`
-      );
+    if (item.stock != null && item.stock > 0 && (existing?.qty ?? 0) >= item.stock) {
+      showToast(`Only ${item.stock} counted in stock for ${item.name} — adding anyway`);
     }
     setCart((prev) => {
       if (existing) {
@@ -222,12 +220,18 @@ export function CatalogCart({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {visible.map((it) => {
               const effectivePrice = getItemPrice(it);
+              const soldOut = it.stock === 0;
 
               return (
                 <button
                   key={it.id}
-                  onClick={() => addToCart(it)}
-                  className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface p-3.5 text-left shadow-sm transition active:scale-95"
+                  onClick={() => !soldOut && addToCart(it)}
+                  disabled={soldOut}
+                  className={`flex flex-col gap-1.5 rounded-2xl border p-3.5 text-left shadow-sm transition ${
+                    soldOut
+                      ? "cursor-not-allowed border-border bg-surface-alt opacity-50"
+                      : "border-border bg-surface active:scale-95"
+                  }`}
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">

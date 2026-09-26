@@ -23,6 +23,7 @@ export function StockClient({
 }) {
   const [search, setSearch] = useState("");
   const [vendorFilter, setVendorFilter] = useState<string>("all");
+  const [copied, setCopied] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -47,9 +48,38 @@ export function StockClient({
     day: "numeric",
   });
 
+  const totalStockLeft = filtered.reduce((s, r) => s + (r.stock ?? 0), 0);
+
+  function copyList() {
+    const lines = [
+      `📦 Stock Left — ${dateLabel}`,
+      "",
+      ...Object.keys(byCategory)
+        .sort()
+        .flatMap((cat) => [
+          cat,
+          ...byCategory[cat].map((r) => `${r.name} — ${r.stock == null ? "not tracked" : r.stock}`),
+          "",
+        ]),
+      `Total stock left: ${totalStockLeft}`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-bold text-ink">Stock Overview</h1>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold text-ink">Stock Overview</h1>
+        <button
+          onClick={copyList}
+          disabled={filtered.length === 0}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted disabled:opacity-40"
+        >
+          {copied ? "Copied ✓" : "📋 Copy list"}
+        </button>
+      </div>
       <p className="mb-4 text-sm text-ink-muted">
         {dateLabel} · {totalSoldToday} item{totalSoldToday === 1 ? "" : "s"} sold today · read-only —
         to change stock, use Shelf Life.

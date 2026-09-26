@@ -50,6 +50,7 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
           await uploadReceipt(fd);
           setNote("");
           setVendorId("");
+          setDate(todayLocal());
         } catch (err) {
           setError(err instanceof Error ? err.message : "Upload failed.");
         }
@@ -110,17 +111,35 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
           capture="environment"
           onChange={handleFile}
           className="hidden"
-          id="receipt-file"
+          id="receipt-file-camera"
           disabled={compressing || pending}
         />
-        <label
-          htmlFor="receipt-file"
-          className={`block w-full cursor-pointer rounded-xl bg-accent py-3 text-center text-sm font-bold text-white ${
-            compressing || pending ? "opacity-50" : ""
-          }`}
-        >
-          {compressing ? "Processing photo…" : pending ? "Uploading…" : "📷 Add Receipt Photo"}
-        </label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFile}
+          className="hidden"
+          id="receipt-file-device"
+          disabled={compressing || pending}
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <label
+            htmlFor="receipt-file-camera"
+            className={`block cursor-pointer rounded-xl bg-accent py-3 text-center text-sm font-bold text-white ${
+              compressing || pending ? "opacity-50" : ""
+            }`}
+          >
+            {compressing ? "Processing…" : pending ? "Uploading…" : "📷 Take Photo"}
+          </label>
+          <label
+            htmlFor="receipt-file-device"
+            className={`block cursor-pointer rounded-xl border border-accent py-3 text-center text-sm font-bold text-accent ${
+              compressing || pending ? "opacity-50" : ""
+            }`}
+          >
+            {compressing ? "Processing…" : pending ? "Uploading…" : "🖼️ Choose from Device"}
+          </label>
+        </div>
         {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
       </div>
 
