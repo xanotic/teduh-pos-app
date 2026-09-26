@@ -53,20 +53,26 @@ export function StockClient({
   const totalStockLeft = filtered.reduce((s, r) => s + (r.stock ?? 0), 0);
 
   function copyList() {
+    const byVendor = new Map<string, { name: string | null; rows: StockRow[] }>();
+    for (const r of filtered) {
+      const key = r.vendorId ?? "none";
+      if (!byVendor.has(key)) byVendor.set(key, { name: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
+      byVendor.get(key)!.rows.push(r);
+    }
+    const sortedVendors = Array.from(byVendor.values()).sort((a, b) => {
+      if (!a.name) return 1;
+      if (!b.name) return -1;
+      return a.name.localeCompare(b.name);
+    });
+
     const lines = [
       `📦 Stock Left — ${dateLabel}`,
       "",
-      ...Object.keys(byCategory)
-        .sort()
-        .flatMap((cat) => [
-          cat,
-          ...byCategory[cat].map((r) => {
-            const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name : null;
-            const stockText = r.stock == null ? "not tracked" : String(r.stock);
-            return vendorName ? `${r.name} (${vendorName}) — ${stockText}` : `${r.name} — ${stockText}`;
-          }),
-          "",
-        ]),
+      ...sortedVendors.flatMap((v) => [
+        `-${v.name ?? "No vendor"}-`,
+        ...v.rows.map((r) => `${r.name} — ${r.stock == null ? "not tracked" : r.stock}`),
+        "",
+      ]),
       `Total stock left: ${totalStockLeft}`,
     ];
     navigator.clipboard.writeText(lines.join("\n"));
