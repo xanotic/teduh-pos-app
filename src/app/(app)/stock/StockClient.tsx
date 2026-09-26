@@ -28,7 +28,9 @@ export function StockClient({
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
   const filtered = rows.filter((r) => {
-    const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase());
+    const q = search.trim().toLowerCase();
+    const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name ?? "" : "";
+    const matchSearch = !q || r.name.toLowerCase().includes(q) || vendorName.toLowerCase().includes(q);
     const matchVendor =
       vendorFilter === "all" ||
       (vendorFilter === "none" ? !r.vendorId : r.vendorId === vendorFilter);
@@ -88,7 +90,7 @@ export function StockClient({
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search item…"
+        placeholder="Search item or vendor…"
         className="input mb-3"
       />
 
