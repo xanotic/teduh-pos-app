@@ -60,7 +60,11 @@ export function StockClient({
         .sort()
         .flatMap((cat) => [
           cat,
-          ...byCategory[cat].map((r) => `${r.name} — ${r.stock == null ? "not tracked" : r.stock}`),
+          ...byCategory[cat].map((r) => {
+            const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name : null;
+            const stockText = r.stock == null ? "not tracked" : String(r.stock);
+            return vendorName ? `${r.name} (${vendorName}) — ${stockText}` : `${r.name} — ${stockText}`;
+          }),
           "",
         ]),
       `Total stock left: ${totalStockLeft}`,
