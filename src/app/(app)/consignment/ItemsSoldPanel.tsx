@@ -48,9 +48,17 @@ export function ItemsSoldPanel({
   const [typeFilter, setTypeFilter] = useState<ItemType | "all">("all");
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [copyVendor, setCopyVendor] = useState<string>("all");
+  const [vendorQuery, setVendorQuery] = useState("");
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+
+  const trimmedVendorQuery = vendorQuery.trim().toLowerCase();
+  const vendorFilter: string =
+    trimmedVendorQuery === ""
+      ? "all"
+      : trimmedVendorQuery === "no vendor"
+        ? "none"
+        : vendors.find((v) => v.name.toLowerCase() === trimmedVendorQuery)?.id ?? "all";
 
   const activePeriod: "daily" | "weekly" | "monthly" | "custom" = range
     ? weekBounds(todayDate).from === range.from && todayDate === range.to
@@ -72,7 +80,11 @@ export function ItemsSoldPanel({
     goRange(from, todayDate);
   }
 
-  const filtered = typeFilter === "all" ? breakdown : breakdown.filter((r) => r.type === typeFilter);
+  const filtered = breakdown.filter((r) => {
+    const matchType = typeFilter === "all" || r.type === typeFilter;
+    const matchVendor = vendorFilter === "all" || (r.vendorId ?? "none") === vendorFilter;
+    return matchType && matchVendor;
+  });
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
   const totalCost = filtered.reduce((s, r) => s + r.cost, 0);
   const anyMissingCost = filtered.some((r) => r.hasMissingCost);
@@ -94,13 +106,13 @@ export function ItemsSoldPanel({
   }
 
   function copyList() {
-    const groups = new Map<string, { key: string; vendorName: string | null; rows: SoldRow[] }>();
+    const groups = new Map<string, { vendorName: string | null; rows: SoldRow[] }>();
     for (const r of filtered) {
       const key = r.vendorId ?? "none";
-      if (!groups.has(key)) groups.set(key, { key, vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
+      if (!groups.has(key)) groups.set(key, { vendorName: r.vendorId ? vendorById.get(r.vendorId)?.name ?? null : null, rows: [] });
       groups.get(key)!.rows.push(r);
     }
-    let sortedGroups = Array.from(groups.values())
+    const sortedGroups = Array.from(groups.values())
       .map((g) => ({
         ...g,
         subtotalQty: g.rows.reduce((s, r) => s + r.qty, 0),
@@ -112,10 +124,6 @@ export function ItemsSoldPanel({
         if (!b.vendorName) return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
-
-    if (copyVendor !== "all") {
-      sortedGroups = sortedGroups.filter((g) => g.key === copyVendor);
-    }
 
     const copiedQty = sortedGroups.reduce((s, g) => s + g.subtotalQty, 0);
     const copiedCost = sortedGroups.reduce((s, g) => s + g.subtotalCost, 0);
@@ -222,20 +230,32 @@ export function ItemsSoldPanel({
         </div>
         <div className="flex items-center gap-1.5">
           {vendors.length > 0 && (
-            <select
-              value={copyVendor}
-              onChange={(e) => setCopyVendor(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink-muted"
-              title="Copy list for a specific vendor only"
-            >
-              <option value="all">All vendors</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-              <option value="none">No vendor</option>
-            </select>
+            <div className="relative">
+              <input
+                value={vendorQuery}
+                onChange={(e) => setVendorQuery(e.target.value)}
+                list="items-sold-vendors"
+                placeholder="All vendors"
+                title="Filter the list — and Copy list — to one vendor"
+                className="w-36 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink-muted"
+              />
+              <datalist id="items-sold-vendors">
+                <option value="No vendor" />
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.name} />
+                ))}
+              </datalist>
+              {vendorQuery && (
+                <button
+                  type="button"
+                  onClick={() => setVendorQuery("")}
+                  title="Clear vendor filter"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           )}
           <button
             onClick={copyList}
