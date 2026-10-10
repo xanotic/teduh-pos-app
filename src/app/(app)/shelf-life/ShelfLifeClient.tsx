@@ -58,6 +58,7 @@ export function ShelfLifeClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [vendorFilter, setVendorFilter] = useState<string>("all");
   const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "not_expired">("all");
+  const [expiredOpen, setExpiredOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -302,30 +303,8 @@ export function ShelfLifeClient({
         </button>
       </form>
 
-      {expiryFilter !== "not_expired" && expiredEntries.length > 0 && (
-        <div className="mb-2">
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-danger">
-            Expired ({expiredEntries.length})
-          </h2>
-          <div className="flex flex-col gap-2">
-            {expiredEntries.map((e) =>
-              renderRow(e, {
-                editingId,
-                setEditingId,
-                confirmId,
-                setConfirmId,
-                startTransition,
-                vendorById,
-                menuItems,
-                vendors,
-              })
-            )}
-          </div>
-        </div>
-      )}
-
       {expiryFilter !== "expired" && (
-        <div className="mb-2 mt-4">
+        <div className="mb-2">
           {expiryFilter === "all" && expiredEntries.length > 0 && (
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
               Not expired ({activeEntries.length})
@@ -351,6 +330,39 @@ export function ShelfLifeClient({
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {expiryFilter !== "not_expired" && expiredEntries.length > 0 && (
+        <div className="mb-2 mt-4">
+          <button
+            type="button"
+            onClick={() => setExpiredOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <h2 className="text-xs font-bold uppercase tracking-wide text-danger">
+              Expired ({expiredEntries.length})
+            </h2>
+            <span className="text-xs font-bold text-ink-muted">
+              {expiredOpen || expiryFilter === "expired" ? "▲ Hide" : "▼ Show"}
+            </span>
+          </button>
+          {(expiredOpen || expiryFilter === "expired") && (
+            <div className="mt-2 flex flex-col gap-2">
+              {expiredEntries.map((e) =>
+                renderRow(e, {
+                  editingId,
+                  setEditingId,
+                  confirmId,
+                  setConfirmId,
+                  startTransition,
+                  vendorById,
+                  menuItems,
+                  vendors,
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
 
