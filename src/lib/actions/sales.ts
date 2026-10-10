@@ -88,12 +88,6 @@ async function restoreShelfLife(
   }
 }
 
-/**
- * Shared by both Sell (Cash/QR Pay) and Giveaway (Giveaway payment method).
- * A giveaway is priced at full sell price, same as a normal sale — the owner
- * is paying the till themselves, so revenue/history/analytics all treat it
- * like any other transaction, just tagged by payment method.
- */
 export async function finalizeSale(paymentMethod: PaymentMethod, lines: CartLine[], note?: string) {
   if (!lines.length) throw new Error("Cart is empty");
 
@@ -125,7 +119,6 @@ export async function finalizeSale(paymentMethod: PaymentMethod, lines: CartLine
   ]);
 
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/history");
   revalidatePath("/analytics");
   revalidatePath("/menu");
@@ -155,7 +148,6 @@ export async function voidTransaction(id: string) {
   }
 
   revalidatePath("/history");
-  revalidatePath("/giveaway");
   revalidatePath("/analytics");
   revalidatePath("/menu");
   revalidatePath("/shelf-life");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { MenuItem, PaymentType, ShelfLifeEntry, Vendor } from "@/lib/types";
+import type { MenuItem, PaymentType, ReturnEntry, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { addShelfLifeEntry, deleteShelfLifeEntry, updateShelfLifeEntry } from "./actions";
 
@@ -54,10 +54,12 @@ export function ShelfLifeClient({
   entries,
   menuItems,
   vendors,
+  returns,
 }: {
   entries: ShelfLifeEntry[];
   menuItems: MenuItem[];
   vendors: Vendor[];
+  returns: ReturnEntry[];
 }) {
   const [tab, setTab] = useState<PaymentType>("consignment");
   const [pending, startTransition] = useTransition();
@@ -74,6 +76,7 @@ export function ShelfLifeClient({
   const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "not_expired">("all");
   const [expiredOpen, setExpiredOpen] = useState(false);
   const [notExpiredOpen, setNotExpiredOpen] = useState(true);
+  const [returnedOpen, setReturnedOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -83,6 +86,10 @@ export function ShelfLifeClient({
   const sorted = [...filtered].sort((a, b) => daysLeft(a.expires_at) - daysLeft(b.expires_at));
   const expiredEntries = sorted.filter((e) => status(daysLeft(e.expires_at)) === "expired");
   const activeEntries = sorted.filter((e) => status(daysLeft(e.expires_at)) !== "expired");
+
+  const filteredReturns = returns.filter(
+    (r) => r.payment_type === tab && (vendorFilter === "all" || (r.vendor_id ?? "none") === vendorFilter)
+  );
 
   const lostAlready = sorted
     .filter((e) => status(daysLeft(e.expires_at)) === "expired")
@@ -413,6 +420,55 @@ export function ShelfLifeClient({
         <p className="text-sm text-ink-muted">
           No expired {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries.
         </p>
+      )}
+
+      {filteredReturns.length > 0 && (
+        <div className="mb-2 mt-4">
+          <button
+            type="button"
+            onClick={() => setReturnedOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <h2 className="text-xs font-bold uppercase tracking-wide text-ink-muted">
+              Returned ({filteredReturns.length})
+            </h2>
+            <span className="text-xs font-bold text-ink-muted">{returnedOpen ? "▲ Hide" : "▼ Show"}</span>
+          </button>
+          {returnedOpen && (
+            <div className="mt-2 flex flex-col gap-2">
+              {filteredReturns.map((r) => {
+                const vendorName = r.vendor_id ? vendorById.get(r.vendor_id)?.name : null;
+                return (
+                  <div
+                    key={r.id}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                      <span className="font-extrabold text-accent">{r.qty}× </span>
+                      {r.item}
+                    </span>
+                    {vendorName && (
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+                        {vendorName}
+                      </span>
+                    )}
+                    <span className="text-xs text-ink-muted">
+                      {new Date(r.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                    {r.cost != null && <span className="text-xs font-bold text-ink-muted">{fmt(r.cost)} each</span>}
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-ink-muted">
+                Picked up by the vendor before expiring — manage/undo these on the Returned tab.
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

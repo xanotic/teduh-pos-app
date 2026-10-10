@@ -31,7 +31,6 @@ export async function addMenuItem(input: {
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
   revalidatePath("/vendor");
@@ -73,7 +72,6 @@ export async function updateMenuItem(
   }
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
   revalidatePath("/vendor");
@@ -94,7 +92,6 @@ export async function resetAllStock() {
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
 }
 
 export async function deleteMenuItem(id: string) {
@@ -103,6 +100,5 @@ export async function deleteMenuItem(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/vendor");
 }

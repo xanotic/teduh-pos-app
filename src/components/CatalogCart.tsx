@@ -1,44 +1,22 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { CartLine, HappyHourSettings, MenuItem, PaymentMethod, Vendor } from "@/lib/types";
+import type { CartLine, MenuItem, PaymentMethod, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { finalizeSale } from "@/lib/actions/sales";
-import { cancelHappyHour } from "@/app/(app)/happy-hour/actions";
-import {
-  calculateHappyHourItemPrice,
-  formatTime12h,
-  isHappyHourActive,
-} from "@/lib/happyHour";
 
 export function CatalogCart({
   items,
-  mode,
-  happyHour,
   vendors = [],
 }: {
   items: MenuItem[];
-  mode: "sell" | "giveaway";
-  happyHour?: HappyHourSettings | null;
   vendors?: Vendor[];
 }) {
   const [search, setSearch] = useState("");
   const [vendorFilter, setVendorFilter] = useState("ALL");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
-  const [happyHourOverride, setHappyHourOverride] = useState<boolean | null>(null);
-
-  const autoHappyHourActive = mode === "sell" && isHappyHourActive(happyHour);
-  const isHappyHour = happyHourOverride !== null ? happyHourOverride : autoHappyHourActive;
-
-  function getItemPrice(item: MenuItem): number {
-    if (isHappyHour && mode === "sell") {
-      return calculateHappyHourItemPrice(item.price, happyHour);
-    }
-    return item.price;
-  }
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -51,9 +29,7 @@ export function CatalogCart({
   });
 
   function addToCart(item: MenuItem) {
-    const effectivePrice = getItemPrice(item);
-
-    if (!(effectivePrice > 0) && !(item.price > 0)) {
+    if (!(item.price > 0)) {
       showToast("Set a price for this item first (Menu tab)");
       return;
     }
@@ -73,7 +49,7 @@ export function CatalogCart({
           itemId: item.id,
           name: item.name,
           category: item.category,
-          price: effectivePrice,
+          price: item.price,
           cost: item.cost,
           qty: 1,
         },
@@ -112,88 +88,17 @@ export function CatalogCart({
     if (!cart.length) return;
     startTransition(async () => {
       try {
-        await finalizeSale(paymentMethod, cart, mode === "giveaway" ? note : undefined);
+        await finalizeSale(paymentMethod, cart);
         setCart([]);
-        setNote("");
-        showToast(
-          mode === "giveaway"
-            ? `Giveaway logged — you pay in ${fmt(total)}`
-            : `${paymentMethod} sale recorded — ${fmt(total)}`
-        );
+        showToast(`${paymentMethod} sale recorded — ${fmt(total)}`);
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Something went wrong");
       }
     });
   }
 
-  function handleCancelHappyHourGlobal() {
-    startTransition(async () => {
-      try {
-        await cancelHappyHour();
-        setCart((prev) =>
-          prev.map((line) => {
-            const originalItem = items.find((i) => i.id === line.itemId);
-            return originalItem ? { ...line, price: originalItem.price } : line;
-          })
-        );
-        showToast("Happy hour cancelled and deactivated");
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : "Failed to cancel happy hour");
-      }
-    });
-  }
-
   return (
     <div>
-      {mode === "sell" && (happyHour?.is_enabled || happyHour?.force_active) && (
-        <div
-          className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 shadow-sm transition ${
-            isHappyHour
-              ? "border-accent bg-accent-soft text-ink"
-              : "border-border bg-surface text-ink-muted"
-          }`}
-        >
-          <div className="flex items-center gap-2.5 text-xs font-semibold">
-            <span className="text-lg">{isHappyHour ? "🎉" : "⏸️"}</span>
-            <div>
-              {isHappyHour ? (
-                <span>
-                  <strong className="font-bold text-accent">Happy Hour Active:</strong>{" "}
-                  <strong className="text-accent font-extrabold">
-                    {happyHour?.discount_type === "percent"
-                      ? `${happyHour.discount_percent ?? 0}% OFF all items`
-                      : `Flat ${fmt(Number(happyHour?.price ?? 0))} for all items`}
-                  </strong>
-                  {happyHour?.force_active
-                    ? " (Flash sale active)"
-                    : ` (until ${formatTime12h(happyHour?.end_time || "")})`}
-                </span>
-              ) : (
-                <span>Happy Hour temporarily paused for this order.</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setHappyHourOverride((v) => (v === null ? !autoHappyHourActive : !v))}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-bold text-ink-muted transition hover:text-ink"
-            >
-              {isHappyHour ? "Pause for this order" : "Apply Happy Hour"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelHappyHourGlobal}
-              disabled={pending}
-              className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger transition hover:bg-danger hover:text-white"
-              title="Cancel and deactivate Happy Hour storewide"
-            >
-              End Promo
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         <div>
           <input
@@ -242,7 +147,6 @@ export function CatalogCart({
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {visible.map((it) => {
-              const effectivePrice = getItemPrice(it);
               const soldOut = it.stock === 0;
 
               return (
@@ -276,29 +180,9 @@ export function CatalogCart({
                   </span>
                   <span className="text-sm font-semibold text-ink">{it.name}</span>
                   <div className="mt-auto flex items-baseline gap-1.5">
-                    {isHappyHour && it.price > 0 && effectivePrice !== it.price ? (
-                      <>
-                        <span className="text-xs text-ink-muted line-through font-normal">
-                          {fmt(it.price)}
-                        </span>
-                        <span className="text-sm font-extrabold text-accent">
-                          {fmt(effectivePrice)}
-                        </span>
-                        {it.price > effectivePrice && (
-                          <span className="rounded bg-success-soft px-1 text-[10px] font-bold text-success">
-                            -{Math.round(((it.price - effectivePrice) / it.price) * 100)}%
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span
-                        className={`text-sm font-bold ${
-                          effectivePrice > 0 ? "text-accent" : "text-ink-muted"
-                        }`}
-                      >
-                        {effectivePrice > 0 ? fmt(effectivePrice) : "Set price"}
-                      </span>
-                    )}
+                    <span className={`text-sm font-bold ${it.price > 0 ? "text-accent" : "text-ink-muted"}`}>
+                      {it.price > 0 ? fmt(it.price) : "Set price"}
+                    </span>
                   </div>
                 </button>
               );
@@ -310,9 +194,7 @@ export function CatalogCart({
         </div>
 
         <aside className="h-fit rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-bold text-ink">
-            {mode === "giveaway" ? "Giveaway Cart" : "Current Order"}
-          </h2>
+          <h2 className="mb-3 text-sm font-bold text-ink">Current Order</h2>
 
           <div className="flex flex-col gap-2">
             {cart.map((l) => {
@@ -346,15 +228,6 @@ export function CatalogCart({
             )}
           </div>
 
-          {mode === "giveaway" && (
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Reason / recipient (optional)"
-              className="input mt-3"
-            />
-          )}
-
           <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
             <span>
               {count} {count === 1 ? "item" : "items"}
@@ -362,32 +235,22 @@ export function CatalogCart({
             <span className="text-lg font-extrabold text-ink">{fmt(total)}</span>
           </div>
 
-          {mode === "sell" ? (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                disabled={!cart.length || pending}
-                onClick={() => checkout("Cash")}
-                className="rounded-xl bg-success py-3.5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                💵 Cash
-              </button>
-              <button
-                disabled={!cart.length || pending}
-                onClick={() => checkout("QR Pay")}
-                className="rounded-xl bg-gold py-3.5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                🔳 QR Pay
-              </button>
-            </div>
-          ) : (
+          <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               disabled={!cart.length || pending}
-              onClick={() => checkout("Giveaway")}
-              className="mt-3 w-full rounded-xl bg-accent py-3.5 text-sm font-bold text-white disabled:opacity-40"
+              onClick={() => checkout("Cash")}
+              className="rounded-xl bg-success py-3.5 text-sm font-bold text-white disabled:opacity-40"
             >
-              🎁 Log Giveaway
+              💵 Cash
             </button>
-          )}
+            <button
+              disabled={!cart.length || pending}
+              onClick={() => checkout("QR Pay")}
+              className="rounded-xl bg-gold py-3.5 text-sm font-bold text-white disabled:opacity-40"
+            >
+              🔳 QR Pay
+            </button>
+          </div>
 
           {toast && (
             <div className="mt-3 rounded-lg bg-ink px-3 py-2 text-center text-xs font-semibold text-white">

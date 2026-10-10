@@ -35,6 +35,7 @@ export function ConsignmentClient({
   const [costOverrides, setCostOverrides] = useState<Record<string, string>>({});
   const [enlargedQr, setEnlargedQr] = useState<{ url: string; label: string } | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [settlementsOpen, setSettlementsOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -265,13 +266,22 @@ export function ConsignmentClient({
         </div>
       )}
 
-      <h2 className="mb-3 text-sm font-bold text-ink">Past Settlements</h2>
-      <div className="flex flex-col gap-3">
-        {settlements.map((s) => (
-          <SettlementCard key={s.id} settlement={s} />
-        ))}
-        {settlements.length === 0 && <p className="text-sm text-ink-muted">No settlements logged yet.</p>}
-      </div>
+      <button
+        type="button"
+        onClick={() => setSettlementsOpen((o) => !o)}
+        className="mb-3 flex w-full items-center justify-between gap-2 text-left"
+      >
+        <h2 className="text-sm font-bold text-ink">Past Settlements ({settlements.length})</h2>
+        <span className="text-ink-muted">{settlementsOpen ? "▲" : "▼"}</span>
+      </button>
+      {settlementsOpen && (
+        <div className="flex flex-col gap-3">
+          {settlements.map((s) => (
+            <SettlementCard key={s.id} settlement={s} />
+          ))}
+          {settlements.length === 0 && <p className="text-sm text-ink-muted">No settlements logged yet.</p>}
+        </div>
+      )}
 
       {enlargedQr && <QrModal url={enlargedQr.url} label={enlargedQr.label} onClose={() => setEnlargedQr(null)} />}
     </>

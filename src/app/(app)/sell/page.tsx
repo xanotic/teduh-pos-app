@@ -1,5 +1,5 @@
 import { getBusinessContext } from "@/lib/business";
-import type { HappyHourSettings, MenuItem, Vendor } from "@/lib/types";
+import type { MenuItem, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { CatalogCart } from "@/components/CatalogCart";
 import { withLiveStock } from "@/lib/stock";
@@ -9,25 +9,18 @@ export const dynamic = "force-dynamic";
 export default async function SellPage() {
   const { supabase, businessId } = await getBusinessContext();
 
-  const [{ data: items }, { data: shelfLife }, { data: todayTxns }, { data: happyHourData }, { data: vendors }] =
-    await Promise.all([
-      supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
-      supabase.from("shelf_life").select("item, qty, expires_at").eq("business_id", businessId),
-      supabase
-        .from("transactions")
-        .select("total, ts")
-        .eq("business_id", businessId)
-        .gte("ts", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
-      supabase
-        .from("happy_hour_settings")
-        .select("*")
-        .eq("business_id", businessId)
-        .maybeSingle(),
-      supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
-    ]);
+  const [{ data: items }, { data: shelfLife }, { data: todayTxns }, { data: vendors }] = await Promise.all([
+    supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
+    supabase.from("shelf_life").select("item, qty, expires_at").eq("business_id", businessId),
+    supabase
+      .from("transactions")
+      .select("total, ts")
+      .eq("business_id", businessId)
+      .gte("ts", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+    supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
+  ]);
 
   const todayTotal = (todayTxns ?? []).reduce((s, t) => s + Number(t.total), 0);
-  const happyHour = happyHourData as HappyHourSettings | null;
   const liveItems = withLiveStock((items ?? []) as MenuItem[], shelfLife ?? []);
 
   return (
@@ -39,7 +32,7 @@ export default async function SellPage() {
           <div className="text-lg font-extrabold text-success">{fmt(todayTotal)}</div>
         </div>
       </div>
-      <CatalogCart items={liveItems} mode="sell" happyHour={happyHour} vendors={(vendors ?? []) as Vendor[]} />
+      <CatalogCart items={liveItems} vendors={(vendors ?? []) as Vendor[]} />
     </div>
   );
 }

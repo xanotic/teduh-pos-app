@@ -16,7 +16,6 @@ function revalidateAll() {
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/stock");
   revalidatePath("/vendor");
   revalidatePath("/analytics");

@@ -265,7 +265,6 @@ export async function resetItemBatches(itemName: string) {
   revalidatePath("/shelf-life");
   revalidatePath("/menu");
   revalidatePath("/sell");
-  revalidatePath("/giveaway");
   revalidatePath("/analytics");
 }
 

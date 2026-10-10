@@ -6,10 +6,8 @@ import { logOut } from "@/app/(auth)/actions";
 
 const TABS = [
   { href: "/sell", label: "Sell" },
-  { href: "/happy-hour", label: "Happy Hour" },
   { href: "/history", label: "History" },
   { href: "/analytics", label: "Analytics" },
-  { href: "/giveaway", label: "Giveaway" },
   { href: "/stock", label: "Stock" },
   { href: "/shelf-life", label: "Shelf Life" },
   { href: "/returns", label: "Returned" },

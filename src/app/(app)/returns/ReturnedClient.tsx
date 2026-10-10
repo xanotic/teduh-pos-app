@@ -21,6 +21,7 @@ export function ReturnedClient({
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [vendorQuery, setVendorQuery] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
   const itemByName = useMemo(
@@ -68,6 +69,44 @@ export function ReturnedClient({
   const totalQty = filtered.reduce((s, r) => s + r.qty, 0);
   const totalValue = filtered.reduce((s, r) => s + (r.cost ?? 0) * r.qty, 0);
   const totalUpfrontRefunded = filtered.reduce((s, r) => s + (r.upfront_reversed ?? 0), 0);
+
+  function copyList() {
+    const groups = new Map<string, { vendorName: string | null; rows: ReturnEntry[] }>();
+    for (const r of filtered) {
+      const key = r.vendor_id ?? "none";
+      if (!groups.has(key)) {
+        groups.set(key, { vendorName: r.vendor_id ? vendorById.get(r.vendor_id)?.name ?? null : null, rows: [] });
+      }
+      groups.get(key)!.rows.push(r);
+    }
+    const sortedGroups = Array.from(groups.values())
+      .map((g) => ({
+        ...g,
+        subtotalQty: g.rows.reduce((s, r) => s + r.qty, 0),
+        subtotalValue: g.rows.reduce((s, r) => s + (r.cost ?? 0) * r.qty, 0),
+      }))
+      .sort((a, b) => {
+        if (!a.vendorName) return 1;
+        if (!b.vendorName) return -1;
+        return a.vendorName.localeCompare(b.vendorName);
+      });
+
+    const lines = [
+      "↩️ Returned to Vendor",
+      "",
+      ...sortedGroups.flatMap((g, i) => [
+        `${i + 1}. ${g.vendorName ?? "No vendor"}`,
+        ...g.rows.map((r) => `${r.qty}× ${r.item}${r.cost != null ? ` — ${fmt(r.cost)} each` : ""}`),
+        `Subtotal: ${g.subtotalQty} item${g.subtotalQty === 1 ? "" : "s"} · ${fmt(g.subtotalValue)}`,
+        "",
+      ]),
+      `Total: ${totalQty} item${totalQty === 1 ? "" : "s"} · ${fmt(totalValue)}`,
+      ...(totalUpfrontRefunded > 0 ? [`Refunded (upfront): ${fmt(totalUpfrontRefunded)}`] : []),
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -155,32 +194,41 @@ export function ReturnedClient({
         {savedMsg && <p className="mt-2 text-xs font-semibold text-success">{savedMsg}</p>}
       </form>
 
-      {vendors.length > 0 && (
-        <div className="relative mb-3 w-48">
-          <input
-            value={vendorQuery}
-            onChange={(e) => setVendorQuery(e.target.value)}
-            list="returns-vendors"
-            placeholder="Filter by vendor…"
-            className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink-muted"
-          />
-          <datalist id="returns-vendors">
-            <option value="No vendor" />
-            {vendors.map((v) => (
-              <option key={v.id} value={v.name} />
-            ))}
-          </datalist>
-          {vendorQuery && (
-            <button
-              type="button"
-              onClick={() => setVendorQuery("")}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      )}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {vendors.length > 0 && (
+          <div className="relative w-48">
+            <input
+              value={vendorQuery}
+              onChange={(e) => setVendorQuery(e.target.value)}
+              list="returns-vendors"
+              placeholder="Filter by vendor…"
+              className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink-muted"
+            />
+            <datalist id="returns-vendors">
+              <option value="No vendor" />
+              {vendors.map((v) => (
+                <option key={v.id} value={v.name} />
+              ))}
+            </datalist>
+            {vendorQuery && (
+              <button
+                type="button"
+                onClick={() => setVendorQuery("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-muted"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+        <button
+          onClick={copyList}
+          disabled={filtered.length === 0}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink-muted disabled:opacity-40"
+        >
+          {copied ? "Copied ✓" : "📋 Copy list"}
+        </button>
+      </div>
 
       {filtered.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-ink-muted">

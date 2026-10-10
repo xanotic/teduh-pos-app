@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Staff, StaffPayout, StaffRole } from "@/lib/types";
-import { fmt } from "@/lib/format";
-import { formatTime12h } from "@/lib/happyHour";
+import { fmt, formatTime12h } from "@/lib/format";
 import { QrModal } from "@/components/QrModal";
 import {
   addStaff,
@@ -16,8 +15,6 @@ import {
   updateStaffRole,
   uploadStaffQr,
 } from "./actions";
-
-type PayMode = "lump" | "hourly";
 
 // Minutes between a clock-in and clock-out time ("HH:MM" 24h strings),
 // assuming an overnight shift (end earlier than start) rolls into the next day.
@@ -32,9 +29,7 @@ function minutesBetween(start: string, end: string): number {
 }
 
 export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts: StaffPayout[] }) {
-  const [payMode, setPayMode] = useState<PayMode>("lump");
   const [staffId, setStaffId] = useState("");
-  const [amount, setAmount] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [rate, setRate] = useState("");
@@ -53,59 +48,38 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
   const hourlyTotal = hours * (parseFloat(rate) || 0);
 
   // Prefill the rate from the staff member's saved default whenever they're
-  // picked in hourly mode — still freely editable per payout.
+  // picked — still freely editable per payout.
   useEffect(() => {
-    if (payMode === "hourly" && selectedStaff?.hourly_rate != null) {
+    if (selectedStaff?.hourly_rate != null) {
       setRate(String(selectedStaff.hourly_rate));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staffId, payMode]);
+  }, [staffId]);
 
   function handleSave() {
-    if (payMode === "hourly") {
-      const r = parseFloat(rate);
-      if (!(hours > 0)) {
-        setError("Set a clock-in and clock-out time.");
-        return;
-      }
-      if (!(r > 0)) {
-        setError("Enter a rate per hour greater than 0.");
-        return;
-      }
-      setError(null);
-      const shiftLabel = `${formatTime12h(startTime)} – ${formatTime12h(endTime)}`;
-      const fullNote = note.trim() ? `${shiftLabel} · ${note.trim()}` : shiftLabel;
-      startTransition(async () => {
-        try {
-          await createStaffPayout({
-            staffId: staffId || null,
-            amount: hours * r,
-            hours,
-            hourlyRate: r,
-            note: fullNote,
-          });
-          setStartTime("");
-          setEndTime("");
-          setNote("");
-          setSavedMsg("Payout logged.");
-          setTimeout(() => setSavedMsg(null), 2500);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "Could not save payout.");
-        }
-      });
+    const r = parseFloat(rate);
+    if (!(hours > 0)) {
+      setError("Set a clock-in and clock-out time.");
       return;
     }
-
-    const amt = parseFloat(amount);
-    if (!(amt > 0)) {
-      setError("Enter an amount greater than 0.");
+    if (!(r > 0)) {
+      setError("Enter a rate per hour greater than 0.");
       return;
     }
     setError(null);
+    const shiftLabel = `${formatTime12h(startTime)} – ${formatTime12h(endTime)}`;
+    const fullNote = note.trim() ? `${shiftLabel} · ${note.trim()}` : shiftLabel;
     startTransition(async () => {
       try {
-        await createStaffPayout({ staffId: staffId || null, amount: amt, note });
-        setAmount("");
+        await createStaffPayout({
+          staffId: staffId || null,
+          amount: hours * r,
+          hours,
+          hourlyRate: r,
+          note: fullNote,
+        });
+        setStartTime("");
+        setEndTime("");
         setNote("");
         setSavedMsg("Payout logged.");
         setTimeout(() => setSavedMsg(null), 2500);
@@ -119,8 +93,8 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
     <div className="mx-auto max-w-3xl">
       <h1 className="text-xl font-bold text-ink">Pay Staff</h1>
       <p className="mb-5 text-sm text-ink-muted">
-        Log a salary, advance, or bonus payout to a staff member — one lump sum, with their QR pay code
-        handy to scan.
+        Log a payout by hours worked — clock in, clock out, pick a rate — with their QR pay code handy
+        to scan.
       </p>
 
       {owing > 0 && (
@@ -133,27 +107,6 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
       <StaffManager staff={staff} />
 
       <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <div className="mb-4 flex gap-1 rounded-xl bg-surface-alt p-1">
-          <button
-            type="button"
-            onClick={() => setPayMode("lump")}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${
-              payMode === "lump" ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            💵 Lump sum
-          </button>
-          <button
-            type="button"
-            onClick={() => setPayMode("hourly")}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${
-              payMode === "hourly" ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            ⏱️ Hourly
-          </button>
-        </div>
-
         <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="col-span-2 sm:col-span-1">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -169,63 +122,44 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
             </select>
           </div>
 
-          {payMode === "lump" ? (
-            <div>
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                Amount (RM)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="input"
-              />
-            </div>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                  Clock in
-                </label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                  Clock out
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-                  Rate (RM/hr)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min={0}
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                  placeholder="0.00"
-                  className="input"
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Clock in
+            </label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Clock out
+            </label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+              Rate (RM/hr)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="0.00"
+              className="input"
+            />
+          </div>
 
-          <div className={payMode === "hourly" ? "col-span-2 sm:col-span-3" : ""}>
+          <div className="col-span-2 sm:col-span-2">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
               Note (optional)
             </label>
@@ -238,7 +172,7 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
           </div>
         </div>
 
-        {payMode === "hourly" && (startTime || endTime || rate) && (
+        {(startTime || endTime || rate) && (
           <div className="mb-3 flex items-center justify-between rounded-xl border border-accent/30 bg-accent-soft px-4 py-3">
             <span className="text-xs font-bold uppercase tracking-wide text-accent">
               {startTime && endTime ? `${formatTime12h(startTime)} – ${formatTime12h(endTime)} · ` : ""}
@@ -262,13 +196,7 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
             />
             <span className="text-xs font-bold text-accent">
               📱 Tap to enlarge — scan to pay {selectedStaff.name}
-              {payMode === "hourly"
-                ? hourlyTotal > 0
-                  ? ` ${fmt(hourlyTotal)}`
-                  : ""
-                : amount && parseFloat(amount) > 0
-                  ? ` ${fmt(parseFloat(amount))}`
-                  : ""}
+              {hourlyTotal > 0 ? ` ${fmt(hourlyTotal)}` : ""}
             </span>
           </button>
         )}
