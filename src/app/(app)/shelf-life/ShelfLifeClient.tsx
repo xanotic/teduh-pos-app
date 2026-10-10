@@ -59,6 +59,7 @@ export function ShelfLifeClient({
   const [vendorFilter, setVendorFilter] = useState<string>("all");
   const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "not_expired">("all");
   const [expiredOpen, setExpiredOpen] = useState(false);
+  const [notExpiredOpen, setNotExpiredOpen] = useState(true);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -305,31 +306,46 @@ export function ShelfLifeClient({
 
       {expiryFilter !== "expired" && (
         <div className="mb-2">
-          {expiryFilter === "all" && expiredEntries.length > 0 && (
+          {expiredEntries.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setNotExpiredOpen((o) => !o)}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
+              <h2 className="text-xs font-bold uppercase tracking-wide text-ink-muted">
+                Not expired ({activeEntries.length})
+              </h2>
+              <span className="text-xs font-bold text-ink-muted">
+                {notExpiredOpen || expiryFilter === "not_expired" ? "▲ Hide" : "▼ Show"}
+              </span>
+            </button>
+          ) : (
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
               Not expired ({activeEntries.length})
             </h2>
           )}
-          <div className="flex flex-col gap-2">
-            {activeEntries.map((e) =>
-              renderRow(e, {
-                editingId,
-                setEditingId,
-                confirmId,
-                setConfirmId,
-                startTransition,
-                vendorById,
-                menuItems,
-                vendors,
-              })
-            )}
-            {activeEntries.length === 0 && (
-              <p className="text-sm text-ink-muted">
-                No {expiryFilter === "not_expired" ? "not-expired " : ""}
-                {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries.
-              </p>
-            )}
-          </div>
+          {(notExpiredOpen || expiryFilter === "not_expired" || expiredEntries.length === 0) && (
+            <div className="mt-2 flex flex-col gap-2">
+              {activeEntries.map((e) =>
+                renderRow(e, {
+                  editingId,
+                  setEditingId,
+                  confirmId,
+                  setConfirmId,
+                  startTransition,
+                  vendorById,
+                  menuItems,
+                  vendors,
+                })
+              )}
+              {activeEntries.length === 0 && (
+                <p className="text-sm text-ink-muted">
+                  No {expiryFilter === "not_expired" ? "not-expired " : ""}
+                  {TABS.find((t) => t.key === tab)?.label.toLowerCase()} entries.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
