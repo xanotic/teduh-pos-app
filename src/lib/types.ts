@@ -100,6 +100,7 @@ export interface StaffPayout {
   id: string;
   business_id: string;
   staff_id: string | null;
+  staff_name: string | null;
   amount: number;
   hours: number | null;
   hourly_rate: number | null;

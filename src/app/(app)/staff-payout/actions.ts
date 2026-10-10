@@ -33,6 +33,26 @@ export async function updateStaffRate(staffId: string, hourlyRate: number | null
 
 export async function deleteStaff(id: string) {
   const { supabase, businessId } = await getBusinessContext();
+
+  // Snapshot the name onto every payout still linked to this staff member
+  // before the row (and its name) is gone for good — staff_payouts.staff_id
+  // is "on delete set null", so without this their payout history would show
+  // "No staff selected" from here on.
+  const { data: staffRow } = await supabase
+    .from("staff")
+    .select("name")
+    .eq("id", id)
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (staffRow) {
+    await supabase
+      .from("staff_payouts")
+      .update({ staff_name: staffRow.name })
+      .eq("staff_id", id)
+      .eq("business_id", businessId)
+      .is("staff_name", null);
+  }
+
   const { error } = await supabase.from("staff").delete().eq("id", id).eq("business_id", businessId);
   if (error) throw new Error(error.message);
   revalidatePath("/staff-payout");
@@ -76,9 +96,18 @@ export async function createStaffPayout(input: {
 
   const { supabase, businessId } = await getBusinessContext();
 
+  // Snapshot the staff name at the time of the payout, not just the id — so
+  // the name survives even if the staff member is later deleted.
+  let staffName: string | null = null;
+  if (input.staffId) {
+    const { data } = await supabase.from("staff").select("name").eq("id", input.staffId).maybeSingle();
+    staffName = data?.name ?? null;
+  }
+
   const { error } = await supabase.from("staff_payouts").insert({
     business_id: businessId,
     staff_id: input.staffId,
+    staff_name: staffName,
     amount: input.amount,
     hours: input.hours ?? null,
     hourly_rate: input.hourlyRate ?? null,
@@ -86,6 +115,21 @@ export async function createStaffPayout(input: {
   });
   if (error) throw new Error(error.message);
 
+  revalidatePath("/staff-payout");
+}
+
+// For payouts from before this fix (staff already deleted, name lost for
+// good) — lets the owner manually type the name back in from memory.
+export async function updateStaffPayoutName(id: string, staffName: string) {
+  const trimmed = staffName.trim();
+  if (!trimmed) throw new Error("Enter a name.");
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("staff_payouts")
+    .update({ staff_name: trimmed })
+    .eq("id", id)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
   revalidatePath("/staff-payout");
 }
 

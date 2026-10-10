@@ -11,6 +11,7 @@ import {
   deleteStaff,
   deleteStaffPayout,
   markStaffPayoutPaid,
+  updateStaffPayoutName,
   updateStaffRate,
   uploadStaffQr,
 } from "./actions";
@@ -290,7 +291,11 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
       <h2 className="mb-3 text-sm font-bold text-ink">Payout History</h2>
       <div className="flex flex-col gap-2">
         {payouts.map((p) => (
-          <PayoutRow key={p.id} payout={p} staffName={p.staff_id ? staffById.get(p.staff_id)?.name ?? null : null} />
+          <PayoutRow
+            key={p.id}
+            payout={p}
+            staffName={p.staff_name ?? (p.staff_id ? staffById.get(p.staff_id)?.name ?? null : null)}
+          />
         ))}
         {payouts.length === 0 && <p className="text-sm text-ink-muted">No payouts logged yet.</p>}
       </div>
@@ -486,6 +491,9 @@ function StaffRow({
 function PayoutRow({ payout, staffName }: { payout: StaffPayout; staffName: string | null }) {
   const [pending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const dateLabel = new Date(payout.created_at).toLocaleString("en-US", {
     weekday: "short",
@@ -496,17 +504,72 @@ function PayoutRow({ payout, staffName }: { payout: StaffPayout; staffName: stri
     minute: "2-digit",
   });
 
+  function saveName() {
+    if (!nameDraft.trim()) {
+      setNameError("Enter a name.");
+      return;
+    }
+    setNameError(null);
+    startTransition(async () => {
+      try {
+        await updateStaffPayoutName(payout.id, nameDraft.trim());
+        setEditingName(false);
+      } catch (e) {
+        setNameError(e instanceof Error ? e.message : "Save failed — try again.");
+      }
+    });
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-ink">{staffName ?? "No staff selected"}</span>
-          {payout.hours != null && (
-            <span className="flex-none rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
-              ⏱️ {payout.hours} hr{Number(payout.hours) === 1 ? "" : "s"} × {fmt(Number(payout.hourly_rate ?? 0))}/hr
-            </span>
-          )}
-        </div>
+        {editingName ? (
+          <div className="mb-1 flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveName()}
+              placeholder="Staff name"
+              className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1 text-sm"
+            />
+            <button
+              disabled={pending}
+              onClick={saveName}
+              className="flex-none rounded-md bg-accent px-2 py-1 text-[11px] font-bold text-white disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditingName(false)}
+              className="flex-none rounded-md border border-border px-2 py-1 text-[11px] font-bold text-ink-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-ink">{staffName ?? "No staff selected"}</span>
+            {!staffName && (
+              <button
+                onClick={() => {
+                  setNameDraft("");
+                  setEditingName(true);
+                }}
+                title="Staff was deleted — type their name back in from memory"
+                className="flex-none rounded-full bg-surface-alt px-2 py-0.5 text-[10px] font-bold text-ink-muted"
+              >
+                ✎ Fix name
+              </button>
+            )}
+          </div>
+        )}
+        {nameError && <p className="mb-1 text-[11px] font-semibold text-danger">{nameError}</p>}
+        {payout.hours != null && (
+          <span className="mb-1 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+            ⏱️ {payout.hours} hr{Number(payout.hours) === 1 ? "" : "s"} × {fmt(Number(payout.hourly_rate ?? 0))}/hr
+          </span>
+        )}
         <div className="text-xs text-ink-muted">
           {dateLabel}
           {payout.note ? ` · ${payout.note}` : ""}
