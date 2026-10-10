@@ -49,7 +49,7 @@ export function ItemsSoldPanel({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [vendorQuery, setVendorQuery] = useState("");
-  const [open, setOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(true);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -147,22 +147,15 @@ export function ItemsSoldPanel({
 
   return (
     <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="mb-3 flex w-full flex-wrap items-center justify-between gap-3 text-left"
-      >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-ink">📦 Items Sold — {label}</h2>
           <p className="text-xs text-ink-muted">
-            {totalQty} item{totalQty === 1 ? "" : "s"} · {fmt(totalCost)} — tap to {open ? "collapse" : "review"}
+            {totalQty} item{totalQty === 1 ? "" : "s"} · {fmt(totalCost)}
           </p>
         </div>
-        <span className="text-ink-muted">{open ? "▲" : "▼"}</span>
-      </button>
+      </div>
 
-      {open && (
-        <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-lg bg-surface-alt p-1">
@@ -282,49 +275,61 @@ export function ItemsSoldPanel({
 
       {filtered.length > 0 ? (
         <>
-          <div className="flex flex-col gap-1.5">
-            {filtered.map((r) => {
-              const isOpen = expanded === r.name;
-              return (
-                <div key={r.name} className="rounded-lg bg-bg px-3 py-1.5">
-                  <button
-                    onClick={() => setExpanded(isOpen ? null : r.name)}
-                    className="flex w-full items-center justify-between gap-2 text-left text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-ink">
-                      <span className="font-extrabold text-accent">{r.qty}×</span>
-                      <span className="truncate">{r.name}</span>
-                      {r.type !== "unknown" && (
-                        <span
-                          className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${TYPE_BADGE[r.type]}`}
-                        >
-                          {r.type === "consignment" ? "Consignment" : "Upfront"}
-                        </span>
-                      )}
-                      <span className="flex-none text-ink-muted">{isOpen ? "▲" : "▼"}</span>
-                    </span>
-                    <span className="flex-none font-bold text-ink-muted">
-                      {r.hasMissingCost ? (
-                        <span className="text-gold">{r.cost > 0 ? `${fmt(r.cost)}+` : "no cost set"}</span>
-                      ) : (
-                        fmt(r.cost)
-                      )}
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div className="mt-1.5 flex flex-col gap-1 border-t border-border pt-1.5">
-                      {r.sales.map((s, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs text-ink-muted">
-                          <span>{fmtDateTime(s.ts, !!range)}</span>
-                          <span className="font-semibold">{s.qty}×</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            onClick={() => setListOpen((o) => !o)}
+            className="mb-1.5 flex w-full items-center justify-between gap-2 text-left"
+          >
+            <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">
+              {filtered.length} item{filtered.length === 1 ? "" : "s"}
+            </span>
+            <span className="text-xs font-bold text-ink-muted">{listOpen ? "▲ Hide" : "▼ Show"}</span>
+          </button>
+          {listOpen && (
+            <div className="flex flex-col gap-1.5">
+              {filtered.map((r) => {
+                const isOpen = expanded === r.name;
+                return (
+                  <div key={r.name} className="rounded-lg bg-bg px-3 py-1.5">
+                    <button
+                      onClick={() => setExpanded(isOpen ? null : r.name)}
+                      className="flex w-full items-center justify-between gap-2 text-left text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-ink">
+                        <span className="font-extrabold text-accent">{r.qty}×</span>
+                        <span className="truncate">{r.name}</span>
+                        {r.type !== "unknown" && (
+                          <span
+                            className={`flex-none rounded-full px-1.5 py-0.5 text-[10px] font-bold ${TYPE_BADGE[r.type]}`}
+                          >
+                            {r.type === "consignment" ? "Consignment" : "Upfront"}
+                          </span>
+                        )}
+                        <span className="flex-none text-ink-muted">{isOpen ? "▲" : "▼"}</span>
+                      </span>
+                      <span className="flex-none font-bold text-ink-muted">
+                        {r.hasMissingCost ? (
+                          <span className="text-gold">{r.cost > 0 ? `${fmt(r.cost)}+` : "no cost set"}</span>
+                        ) : (
+                          fmt(r.cost)
+                        )}
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="mt-1.5 flex flex-col gap-1 border-t border-border pt-1.5">
+                        {r.sales.map((s, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs text-ink-muted">
+                            <span>{fmtDateTime(s.ts, !!range)}</span>
+                            <span className="font-semibold">{s.qty}×</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-sm font-bold text-ink">
             <span>{totalQty} item{totalQty === 1 ? "" : "s"} sold</span>
             <span>{fmt(totalCost)}</span>
@@ -337,8 +342,6 @@ export function ItemsSoldPanel({
         </>
       ) : (
         <p className="text-sm text-ink-muted">No sales in this period.</p>
-      )}
-        </>
       )}
     </div>
   );
