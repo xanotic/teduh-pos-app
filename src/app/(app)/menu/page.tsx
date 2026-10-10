@@ -9,7 +9,7 @@ export default async function MenuPage() {
   const { supabase, businessId } = await getBusinessContext();
 
   const [{ data }, { data: shelfLife }, { data: vendors }] = await Promise.all([
-    supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+    supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
     supabase.from("shelf_life").select("item, qty, expires_at").eq("business_id", businessId),
     supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
   ]);

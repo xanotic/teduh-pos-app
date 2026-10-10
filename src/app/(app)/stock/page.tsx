@@ -21,7 +21,7 @@ export default async function StockPage() {
   const end = new Date(start.getTime() + 86400000);
 
   const [{ data: items }, { data: shelfLife }, { data: vendors }, { data: soldRows }] = await Promise.all([
-    supabase.from("menu_items").select("*").eq("business_id", businessId).order("category").order("name"),
+    supabase.from("menu_items").select("*").eq("business_id", businessId).order("name"),
     supabase.from("shelf_life").select("item, qty, vendor_id, expires_at").eq("business_id", businessId),
     supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
     supabase
@@ -56,7 +56,6 @@ export default async function StockPage() {
     return {
       id: it.id,
       name: it.name,
-      category: it.category,
       stock: it.stock,
       soldToday: soldTodayMap[key] ?? 0,
       vendorId: itemVendorMap[key] ?? null,

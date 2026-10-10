@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import type { Vendor } from "@/lib/types";
 import { QrModal } from "@/components/QrModal";
-import { addVendor, deleteVendor, uploadVendorQr } from "./actions";
+import { addVendor, deleteVendor, uploadVendorQr } from "../shelf-life/actions";
 
 export function VendorManager({ vendors }: { vendors: Vendor[] }) {
   const [open, setOpen] = useState(false);

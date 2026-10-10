@@ -33,8 +33,26 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
   const [error, setError] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
   const [enlarged, setEnlarged] = useState<ReceiptRow | null>(null);
+  const [filterDate, setFilterDate] = useState("");
+  const [filterVendorQuery, setFilterVendorQuery] = useState("");
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+
+  const filterVendorMatch = useMemo(() => {
+    const q = filterVendorQuery.trim().toLowerCase();
+    if (!q) return "all" as const;
+    if ("no vendor".startsWith(q)) return "none" as const;
+    const match = vendors.find((v) => v.name.toLowerCase().includes(q));
+    return match ? match.id : ("nomatch" as const);
+  }, [filterVendorQuery, vendors]);
+
+  const visibleReceipts = receipts.filter((r) => {
+    const matchDate = !filterDate || r.date === filterDate;
+    const matchVendor =
+      filterVendorMatch === "all" ||
+      (filterVendorMatch === "none" ? !r.vendorId : filterVendorMatch === "nomatch" ? false : r.vendorId === filterVendorMatch);
+    return matchDate && matchVendor;
+  });
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -66,7 +84,7 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
     }
   }
 
-  const byDate = receipts.reduce<Record<string, ReceiptRow[]>>((acc, r) => {
+  const byDate = visibleReceipts.reduce<Record<string, ReceiptRow[]>>((acc, r) => {
     (acc[r.date] ??= []).push(r);
     return acc;
   }, {});
@@ -148,6 +166,53 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
         {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
       </div>
 
+      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Filter by date
+          </label>
+          <div className="flex gap-1">
+            <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="input" />
+            {filterDate && (
+              <button
+                onClick={() => setFilterDate("")}
+                className="flex-none rounded-lg border border-border px-2 text-xs font-bold text-ink-muted"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="col-span-2 sm:col-span-2">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Filter by vendor
+          </label>
+          <div className="flex gap-1">
+            <input
+              list="receipts-vendors"
+              value={filterVendorQuery}
+              onChange={(e) => setFilterVendorQuery(e.target.value)}
+              placeholder="Search vendor…"
+              className="input"
+            />
+            <datalist id="receipts-vendors">
+              <option value="No vendor" />
+              {vendors.map((v) => (
+                <option key={v.id} value={v.name} />
+              ))}
+            </datalist>
+            {filterVendorQuery && (
+              <button
+                onClick={() => setFilterVendorQuery("")}
+                className="flex-none rounded-lg border border-border px-2 text-xs font-bold text-ink-muted"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {Object.keys(byDate)
         .sort((a, b) => (a < b ? 1 : -1))
         .map((d) => (
@@ -174,7 +239,11 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
           </div>
         ))}
 
-      {receipts.length === 0 && <p className="text-sm text-ink-muted">No receipts uploaded yet.</p>}
+      {visibleReceipts.length === 0 && (
+        <p className="text-sm text-ink-muted">
+          {receipts.length === 0 ? "No receipts uploaded yet." : "No receipts match."}
+        </p>
+      )}
 
       {enlarged && enlarged.url && (
         <QrModal

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { CartLine, HappyHourSettings, MenuItem, PaymentMethod } from "@/lib/types";
+import type { CartLine, HappyHourSettings, MenuItem, PaymentMethod, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { finalizeSale } from "@/lib/actions/sales";
 import { cancelHappyHour } from "@/app/(app)/happy-hour/actions";
@@ -15,13 +15,15 @@ export function CatalogCart({
   items,
   mode,
   happyHour,
+  vendors = [],
 }: {
   items: MenuItem[];
   mode: "sell" | "giveaway";
   happyHour?: HappyHourSettings | null;
+  vendors?: Vendor[];
 }) {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("ALL");
+  const [vendorFilter, setVendorFilter] = useState("ALL");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
@@ -38,15 +40,14 @@ export function CatalogCart({
     return item.price;
   }
 
-  const categories = useMemo(() => {
-    const set = new Set(items.map((i) => i.category));
-    return ["ALL", ...Array.from(set)];
-  }, [items]);
+  const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
   const visible = items.filter((it) => {
-    const matchCat = category === "ALL" || it.category === category;
+    const matchVendor =
+      vendorFilter === "ALL" ||
+      (vendorFilter === "NONE" ? !it.vendor_id : it.vendor_id === vendorFilter);
     const matchSearch = !search || it.name.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch;
+    return matchVendor && matchSearch;
   });
 
   function addToCart(item: MenuItem) {
@@ -201,21 +202,43 @@ export function CatalogCart({
             placeholder="Search item…"
             className="input mb-3"
           />
-          <div className="mb-4 flex flex-wrap gap-2">
-            {categories.map((c) => (
+          {vendors.length > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
               <button
-                key={c}
-                onClick={() => setCategory(c)}
+                onClick={() => setVendorFilter("ALL")}
                 className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
-                  category === c
+                  vendorFilter === "ALL"
                     ? "border-accent bg-accent-soft text-accent"
                     : "border-border bg-surface text-ink-muted"
                 }`}
               >
-                {c === "ALL" ? "All" : c.charAt(0) + c.slice(1).toLowerCase()}
+                All
               </button>
-            ))}
-          </div>
+              {vendors.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setVendorFilter(v.id)}
+                  className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
+                    vendorFilter === v.id
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border bg-surface text-ink-muted"
+                  }`}
+                >
+                  {v.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setVendorFilter("NONE")}
+                className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
+                  vendorFilter === "NONE"
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border bg-surface text-ink-muted"
+                }`}
+              >
+                No vendor
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {visible.map((it) => {
@@ -235,7 +258,7 @@ export function CatalogCart({
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">
-                      {it.category}
+                      {it.vendor_id ? vendorById.get(it.vendor_id)?.name ?? "" : ""}
                     </span>
                     {it.stock != null && (
                       <span

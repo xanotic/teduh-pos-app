@@ -172,6 +172,7 @@ export async function addVendor(name: string) {
 
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
+  revalidatePath("/vendor");
   return data;
 }
 
@@ -182,6 +183,7 @@ export async function deleteVendor(id: string) {
 
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
+  revalidatePath("/vendor");
 }
 
 export async function uploadVendorQr(vendorId: string, formData: FormData) {
@@ -210,6 +212,7 @@ export async function uploadVendorQr(vendorId: string, formData: FormData) {
 
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
+  revalidatePath("/vendor");
 }
 
 /**

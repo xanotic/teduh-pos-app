@@ -6,18 +6,22 @@ import type { PaymentType } from "@/lib/types";
 
 export async function addMenuItem(input: {
   name: string;
-  category: string;
   price: number;
   cost: number | null;
   stock: number | null;
   paymentType?: PaymentType | null;
   vendorId?: string | null;
+  vendorName?: string | null;
 }) {
   const { supabase, businessId } = await getBusinessContext();
+  // menu_items.category is a required DB column from the old category-based
+  // layout — no longer shown or editable in the UI (vendor replaced it as
+  // the organizing field), so it's just auto-filled here to satisfy the
+  // not-null constraint without a schema migration.
   const { error } = await supabase.from("menu_items").insert({
     business_id: businessId,
     name: input.name,
-    category: input.category.toUpperCase(),
+    category: (input.vendorName?.trim() || "ITEM").toUpperCase(),
     price: input.price,
     cost: input.cost,
     stock: input.stock,
@@ -30,13 +34,13 @@ export async function addMenuItem(input: {
   revalidatePath("/giveaway");
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
+  revalidatePath("/vendor");
 }
 
 export async function updateMenuItem(
   id: string,
   patch: {
     name?: string;
-    category?: string;
     price?: number;
     cost?: number | null;
     stock?: number | null;
@@ -46,7 +50,6 @@ export async function updateMenuItem(
 ) {
   const { supabase, businessId } = await getBusinessContext();
   const cleanPatch = { ...patch };
-  if (cleanPatch.category) cleanPatch.category = cleanPatch.category.toUpperCase();
   const { data, error } = await supabase
     .from("menu_items")
     .update(cleanPatch)
@@ -73,29 +76,7 @@ export async function updateMenuItem(
   revalidatePath("/giveaway");
   revalidatePath("/shelf-life");
   revalidatePath("/consignment");
-}
-
-export async function bulkUpdateStock(updates: { id: string; stock: number | null }[]) {
-  if (!updates.length) return;
-  const { supabase, businessId } = await getBusinessContext();
-  const results = await Promise.all(
-    updates.map((u) =>
-      supabase
-        .from("menu_items")
-        .update({ stock: u.stock })
-        .eq("id", u.id)
-        .eq("business_id", businessId)
-        .select("id")
-        .single()
-    )
-  );
-  const failed = results.filter((r) => r.error || !r.data);
-  if (failed.length) {
-    throw new Error(`${failed.length} of ${updates.length} item(s) failed to save. Refresh and try again.`);
-  }
-  revalidatePath("/menu");
-  revalidatePath("/sell");
-  revalidatePath("/giveaway");
+  revalidatePath("/vendor");
 }
 
 // Only plain-stock items (payment_type null) — Shelf Life items' stock is
@@ -123,4 +104,5 @@ export async function deleteMenuItem(id: string) {
   revalidatePath("/menu");
   revalidatePath("/sell");
   revalidatePath("/giveaway");
+  revalidatePath("/vendor");
 }

@@ -13,10 +13,10 @@ const TABS = [
   { href: "/stock", label: "Stock" },
   { href: "/shelf-life", label: "Shelf Life" },
   { href: "/consignment", label: "Consignment" },
-  { href: "/upfront-payout", label: "Upfront Payout" },
   { href: "/staff-payout", label: "Pay Staff" },
   { href: "/receipts", label: "Receipts" },
   { href: "/menu", label: "Menu" },
+  { href: "/vendor", label: "Vendor" },
 ];
 
 export function Nav({ businessName }: { businessName: string }) {

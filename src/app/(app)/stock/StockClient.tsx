@@ -6,7 +6,6 @@ import type { Vendor } from "@/lib/types";
 interface StockRow {
   id: string;
   name: string;
-  category: string;
   stock: number | null;
   soldToday: number;
   vendorId: string | null;
@@ -37,10 +36,18 @@ export function StockClient({
     return matchSearch && matchVendor;
   });
 
-  const byCategory = filtered.reduce<Record<string, StockRow[]>>((acc, r) => {
-    (acc[r.category] ??= []).push(r);
+  const byVendor = filtered.reduce<Record<string, StockRow[]>>((acc, r) => {
+    const key = r.vendorId ?? "none";
+    (acc[key] ??= []).push(r);
     return acc;
   }, {});
+  const sortedVendorKeys = Object.keys(byVendor).sort((a, b) => {
+    const nameA = a === "none" ? null : vendorById.get(a)?.name;
+    const nameB = b === "none" ? null : vendorById.get(b)?.name;
+    if (!nameA) return 1;
+    if (!nameB) return -1;
+    return nameA.localeCompare(nameB);
+  });
 
   const totalSoldToday = filtered.reduce((s, r) => s + r.soldToday, 0);
 
@@ -137,47 +144,39 @@ export function StockClient({
         </div>
       )}
 
-      {Object.keys(byCategory)
-        .sort()
-        .map((cat) => (
-          <div key={cat} className="mb-5">
-            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">{cat}</h2>
-            <div className="flex flex-col gap-1.5">
-              {byCategory[cat].map((r) => {
-                const vendorName = r.vendorId ? vendorById.get(r.vendorId)?.name : null;
-                return (
-                  <div
-                    key={r.id}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{r.name}</span>
-                    {vendorName && (
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
-                        {vendorName}
-                      </span>
-                    )}
-                    <span className="rounded-full bg-surface-alt px-2.5 py-1 text-xs font-bold text-ink-muted">
-                      Sold today: {r.soldToday}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                        r.stock == null
-                          ? "bg-surface-alt text-ink-muted"
-                          : r.stock === 0
-                            ? "bg-danger-soft text-danger"
-                            : r.stock <= 3
-                              ? "bg-surface-alt text-gold"
-                              : "bg-success-soft text-success"
-                      }`}
-                    >
-                      {r.stock == null ? "Not tracked" : `${r.stock} left`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+      {sortedVendorKeys.map((key) => (
+        <div key={key} className="mb-5">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
+            {key === "none" ? "No vendor" : vendorById.get(key)?.name ?? "No vendor"}
+          </h2>
+          <div className="flex flex-col gap-1.5">
+            {byVendor[key].map((r) => (
+              <div
+                key={r.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{r.name}</span>
+                <span className="rounded-full bg-surface-alt px-2.5 py-1 text-xs font-bold text-ink-muted">
+                  Sold today: {r.soldToday}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    r.stock == null
+                      ? "bg-surface-alt text-ink-muted"
+                      : r.stock === 0
+                        ? "bg-danger-soft text-danger"
+                        : r.stock <= 3
+                          ? "bg-surface-alt text-gold"
+                          : "bg-success-soft text-success"
+                  }`}
+                >
+                  {r.stock == null ? "Not tracked" : `${r.stock} left`}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      ))}
 
       {filtered.length === 0 && <p className="text-sm text-ink-muted">No items match.</p>}
     </div>

@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import type { MenuItem, PaymentType, ShelfLifeEntry, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { addShelfLifeEntry, deleteShelfLifeEntry, updateShelfLifeEntry } from "./actions";
-import { VendorManager } from "./VendorManager";
 
 function daysLeft(dateStr: string) {
   const today = new Date();
@@ -133,8 +132,6 @@ export function ShelfLifeClient({
         ))}
       </div>
       <p className="mb-4 text-xs text-ink-muted">{TABS.find((t) => t.key === tab)?.hint}</p>
-
-      <VendorManager vendors={vendors} />
 
       {vendors.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-1.5">
