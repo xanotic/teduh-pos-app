@@ -92,6 +92,7 @@ export interface Staff {
   business_id: string;
   name: string;
   qr_url: string | null;
+  hourly_rate: number | null;
   created_at: string;
 }
 
@@ -100,6 +101,8 @@ export interface StaffPayout {
   business_id: string;
   staff_id: string | null;
   amount: number;
+  hours: number | null;
+  hourly_rate: number | null;
   note: string | null;
   paid: boolean;
   paid_at: string | null;

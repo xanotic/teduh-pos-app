@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Staff, StaffPayout } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { QrModal } from "@/components/QrModal";
@@ -10,12 +10,18 @@ import {
   deleteStaff,
   deleteStaffPayout,
   markStaffPayoutPaid,
+  updateStaffRate,
   uploadStaffQr,
 } from "./actions";
 
+type PayMode = "lump" | "hourly";
+
 export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts: StaffPayout[] }) {
+  const [payMode, setPayMode] = useState<PayMode>("lump");
   const [staffId, setStaffId] = useState("");
   const [amount, setAmount] = useState("");
+  const [hours, setHours] = useState("");
+  const [rate, setRate] = useState("");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +33,44 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
 
   const owing = payouts.filter((p) => !p.paid).reduce((s, p) => s + Number(p.amount), 0);
 
+  const hourlyTotal = (parseFloat(hours) || 0) * (parseFloat(rate) || 0);
+
+  // Prefill the rate from the staff member's saved default whenever they're
+  // picked in hourly mode — still freely editable per payout.
+  useEffect(() => {
+    if (payMode === "hourly" && selectedStaff?.hourly_rate != null) {
+      setRate(String(selectedStaff.hourly_rate));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffId, payMode]);
+
   function handleSave() {
+    if (payMode === "hourly") {
+      const h = parseFloat(hours);
+      const r = parseFloat(rate);
+      if (!(h > 0)) {
+        setError("Enter hours worked greater than 0.");
+        return;
+      }
+      if (!(r > 0)) {
+        setError("Enter a rate per hour greater than 0.");
+        return;
+      }
+      setError(null);
+      startTransition(async () => {
+        try {
+          await createStaffPayout({ staffId: staffId || null, amount: h * r, hours: h, hourlyRate: r, note });
+          setHours("");
+          setNote("");
+          setSavedMsg("Payout logged.");
+          setTimeout(() => setSavedMsg(null), 2500);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Could not save payout.");
+        }
+      });
+      return;
+    }
+
     const amt = parseFloat(amount);
     if (!(amt > 0)) {
       setError("Enter an amount greater than 0.");
@@ -65,8 +108,29 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
       <StaffManager staff={staff} />
 
       <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+        <div className="mb-4 flex gap-1 rounded-xl bg-surface-alt p-1">
+          <button
+            type="button"
+            onClick={() => setPayMode("lump")}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${
+              payMode === "lump" ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            💵 Lump sum
+          </button>
+          <button
+            type="button"
+            onClick={() => setPayMode("hourly")}
+            className={`flex-1 rounded-lg px-3 py-2 text-sm font-bold ${
+              payMode === "hourly" ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            ⏱️ Hourly
+          </button>
+        </div>
+
         <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div>
+          <div className="col-span-2 sm:col-span-1">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
               Staff
             </label>
@@ -79,21 +143,56 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-              Amount (RM)
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min={0}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="input"
-            />
-          </div>
-          <div>
+
+          {payMode === "lump" ? (
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                Amount (RM)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min={0}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="input"
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Hours worked
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min={0}
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  placeholder="0"
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Rate (RM/hr)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="0.00"
+                  className="input"
+                />
+              </div>
+            </>
+          )}
+
+          <div className={payMode === "hourly" ? "col-span-2 sm:col-span-3" : ""}>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
               Note (optional)
             </label>
@@ -105,6 +204,15 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
             />
           </div>
         </div>
+
+        {payMode === "hourly" && (hours || rate) && (
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-accent/30 bg-accent-soft px-4 py-3">
+            <span className="text-xs font-bold uppercase tracking-wide text-accent">
+              {parseFloat(hours) || 0} hr{parseFloat(hours) === 1 ? "" : "s"} × {fmt(parseFloat(rate) || 0)}/hr
+            </span>
+            <span className="text-lg font-extrabold text-accent">{fmt(hourlyTotal)}</span>
+          </div>
+        )}
 
         {selectedStaff?.qr_url && (
           <button
@@ -120,7 +228,13 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
             />
             <span className="text-xs font-bold text-accent">
               📱 Tap to enlarge — scan to pay {selectedStaff.name}
-              {amount && parseFloat(amount) > 0 ? ` ${fmt(parseFloat(amount))}` : ""}
+              {payMode === "hourly"
+                ? hourlyTotal > 0
+                  ? ` ${fmt(hourlyTotal)}`
+                  : ""
+                : amount && parseFloat(amount) > 0
+                  ? ` ${fmt(parseFloat(amount))}`
+                  : ""}
             </span>
           </button>
         )}
@@ -158,6 +272,7 @@ function StaffManager({ staff }: { staff: Staff[] }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
+  const [rate, setRate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -167,8 +282,9 @@ function StaffManager({ staff }: { staff: Staff[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await addStaff(name.trim());
+        await addStaff(name.trim(), rate === "" ? null : parseFloat(rate) || null);
         setName("");
+        setRate("");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not add staff.");
       }
@@ -198,9 +314,19 @@ function StaffManager({ staff }: { staff: Staff[] }) {
               placeholder="Staff name"
               className="input flex-1"
             />
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              placeholder="Rate RM/hr"
+              title="Default hourly rate (optional) — prefills on the Hourly payout form"
+              className="input w-28 flex-none"
+            />
             <button
               disabled={pending}
-              className="rounded-lg bg-accent px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              className="flex-none rounded-lg bg-accent px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
             >
               + Add
             </button>
@@ -240,6 +366,7 @@ function StaffRow({
   const [error, setError] = useState<string | null>(null);
   const [enlarged, setEnlarged] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ratePending, startRateTransition] = useTransition();
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -254,6 +381,21 @@ function StaffRow({
         setError(err instanceof Error ? err.message : "Upload failed.");
       } finally {
         if (fileRef.current) fileRef.current.value = "";
+      }
+    });
+  }
+
+  function handleRateBlur(e: React.FocusEvent<HTMLInputElement>) {
+    const raw = e.target.value.trim();
+    const newRate = raw === "" ? null : parseFloat(raw) || null;
+    if (newRate === staff.hourly_rate) return;
+    setError(null);
+    startRateTransition(async () => {
+      try {
+        await updateStaffRate(staff.id, newRate);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — try again.");
+        e.target.value = staff.hourly_rate != null ? String(staff.hourly_rate) : "";
       }
     });
   }
@@ -274,6 +416,17 @@ function StaffRow({
         </div>
       )}
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{staff.name}</span>
+      <input
+        type="number"
+        step="0.1"
+        min={0}
+        defaultValue={staff.hourly_rate ?? ""}
+        placeholder="Rate RM/hr"
+        disabled={ratePending}
+        onBlur={handleRateBlur}
+        title="Default hourly rate"
+        className="w-24 flex-none rounded-md border border-border bg-bg px-2 py-1 text-right text-xs"
+      />
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" id={`staff-qr-${staff.id}`} />
       <label
         htmlFor={`staff-qr-${staff.id}`}
@@ -314,7 +467,14 @@ function PayoutRow({ payout, staffName }: { payout: StaffPayout; staffName: stri
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-ink">{staffName ?? "No staff selected"}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-ink">{staffName ?? "No staff selected"}</span>
+          {payout.hours != null && (
+            <span className="flex-none rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+              ⏱️ {payout.hours} hr{Number(payout.hours) === 1 ? "" : "s"} × {fmt(Number(payout.hourly_rate ?? 0))}/hr
+            </span>
+          )}
+        </div>
         <div className="text-xs text-ink-muted">
           {dateLabel}
           {payout.note ? ` · ${payout.note}` : ""}

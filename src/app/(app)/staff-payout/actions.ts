@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getBusinessContext } from "@/lib/business";
 
-export async function addStaff(name: string) {
+export async function addStaff(name: string, hourlyRate?: number | null) {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Enter a staff name.");
 
@@ -11,13 +11,24 @@ export async function addStaff(name: string) {
 
   const { data, error } = await supabase
     .from("staff")
-    .insert({ business_id: businessId, name: trimmed })
-    .select("id, business_id, name, qr_url, created_at")
+    .insert({ business_id: businessId, name: trimmed, hourly_rate: hourlyRate ?? null })
+    .select("id, business_id, name, qr_url, hourly_rate, created_at")
     .single();
   if (error) throw new Error(error.message);
 
   revalidatePath("/staff-payout");
   return data;
+}
+
+export async function updateStaffRate(staffId: string, hourlyRate: number | null) {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("staff")
+    .update({ hourly_rate: hourlyRate })
+    .eq("id", staffId)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/staff-payout");
 }
 
 export async function deleteStaff(id: string) {
@@ -54,7 +65,13 @@ export async function uploadStaffQr(staffId: string, formData: FormData) {
   revalidatePath("/staff-payout");
 }
 
-export async function createStaffPayout(input: { staffId: string | null; amount: number; note?: string }) {
+export async function createStaffPayout(input: {
+  staffId: string | null;
+  amount: number;
+  note?: string;
+  hours?: number | null;
+  hourlyRate?: number | null;
+}) {
   if (!(input.amount > 0)) throw new Error("Enter an amount greater than 0.");
 
   const { supabase, businessId } = await getBusinessContext();
@@ -63,6 +80,8 @@ export async function createStaffPayout(input: { staffId: string | null; amount:
     business_id: businessId,
     staff_id: input.staffId,
     amount: input.amount,
+    hours: input.hours ?? null,
+    hourly_rate: input.hourlyRate ?? null,
     note: input.note?.trim() || null,
   });
   if (error) throw new Error(error.message);
