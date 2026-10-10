@@ -18,6 +18,19 @@ function status(days: number): "expired" | "soon" | "ok" {
   return "ok";
 }
 
+function todayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function fmtDate(dateStr: string) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 const STATUS_STYLE = {
   expired: "bg-danger-soft text-danger",
   soon: "bg-surface-alt text-gold",
@@ -50,6 +63,7 @@ export function ShelfLifeClient({
   const [pending, startTransition] = useTransition();
   const [item, setItem] = useState("");
   const [date, setDate] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(todayLocal());
   const [notes, setNotes] = useState("");
   const [qty, setQty] = useState("1");
   const [cost, setCost] = useState("");
@@ -98,6 +112,7 @@ export function ShelfLifeClient({
       await addShelfLifeEntry({
         item: item.trim(),
         expiresAt: date,
+        deliveryDate: deliveryDate || todayLocal(),
         notes: notes.trim(),
         paymentType: tab,
         qty: parseInt(qty, 10) || 1,
@@ -106,6 +121,7 @@ export function ShelfLifeClient({
       });
       setItem("");
       setDate("");
+      setDeliveryDate(todayLocal());
       setNotes("");
       setQty("1");
       setCost("");
@@ -258,6 +274,17 @@ export function ShelfLifeClient({
             Expiration Date
           </label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Delivery Date
+          </label>
+          <input
+            type="date"
+            value={deliveryDate}
+            onChange={(e) => setDeliveryDate(e.target.value)}
+            className="input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -459,12 +486,13 @@ function renderRow(
         </span>
       )}
       {e.notes && <span className="basis-full text-xs text-ink-muted">{e.notes}</span>}
-      <span className="text-xs text-ink-muted">
-        {new Date(e.expires_at + "T00:00:00").toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}
+      {e.delivery_date && (
+        <span className="text-xs text-ink-muted" title="Delivery date">
+          📦 {fmtDate(e.delivery_date)}
+        </span>
+      )}
+      <span className="text-xs text-ink-muted" title="Expiration date">
+        {fmtDate(e.expires_at)}
       </span>
       <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_STYLE[s]}`}>{label}</span>
       {loss != null && s === "expired" && (
@@ -513,6 +541,7 @@ function EditRow({
   const [pending, startTransition] = useTransition();
   const [item, setItem] = useState(entry.item);
   const [date, setDate] = useState(entry.expires_at);
+  const [deliveryDate, setDeliveryDate] = useState(entry.delivery_date ?? "");
   const [notes, setNotes] = useState(entry.notes ?? "");
   const [qty, setQty] = useState(String(entry.qty));
   const [initialQty, setInitialQty] = useState(String(entry.initial_qty ?? entry.qty));
@@ -530,6 +559,7 @@ function EditRow({
         await updateShelfLifeEntry(entry.id, {
           item: item.trim(),
           expiresAt: date,
+          deliveryDate: deliveryDate || null,
           notes: notes.trim(),
           qty: parseInt(qty, 10) || 1,
           initialQty: parseInt(initialQty, 10) || undefined,
@@ -550,7 +580,7 @@ function EditRow({
         {TABS.find((t) => t.key === entry.payment_type)?.label} · Vendor: <strong className="text-ink">{vendorName ?? "None set"}</strong> —
         change supply type or vendor on the Menu tab.
       </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-7">
         <div className="col-span-2">
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Item</label>
           <input value={item} onChange={(e) => setItem(e.target.value)} list="menu-names" className="input" />
@@ -596,6 +626,17 @@ function EditRow({
             Expiration Date
           </label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input" />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
+            Delivery Date
+          </label>
+          <input
+            type="date"
+            value={deliveryDate}
+            onChange={(e) => setDeliveryDate(e.target.value)}
+            className="input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Notes</label>

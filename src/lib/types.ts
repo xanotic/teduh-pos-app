@@ -48,6 +48,7 @@ export interface ShelfLifeEntry {
   business_id: string;
   item: string;
   expires_at: string;
+  delivery_date: string | null;
   notes: string | null;
   payment_type: PaymentType;
   qty: number;

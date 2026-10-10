@@ -4,6 +4,14 @@ import { revalidatePath } from "next/cache";
 import { getBusinessContext } from "@/lib/business";
 import type { PaymentType } from "@/lib/types";
 
+// Malaysia is UTC+8 with no DST — same explicit-offset approach used across
+// business.ts/analytics/consignment/sales.ts.
+const MY_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+function todayInMalaysia(): string {
+  return new Date(Date.now() + MY_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 export async function addShelfLifeEntry(input: {
   item: string;
   expiresAt: string;
@@ -12,6 +20,7 @@ export async function addShelfLifeEntry(input: {
   qty: number;
   cost: number | null;
   vendorId?: string | null;
+  deliveryDate?: string | null;
 }) {
   const { supabase, businessId } = await getBusinessContext();
   const entryQty = input.qty || 1;
@@ -20,6 +29,7 @@ export async function addShelfLifeEntry(input: {
     business_id: businessId,
     item: input.item,
     expires_at: input.expiresAt,
+    delivery_date: input.deliveryDate || todayInMalaysia(),
     notes: input.notes || null,
     payment_type: input.paymentType,
     qty: entryQty,
@@ -68,6 +78,7 @@ export async function updateShelfLifeEntry(
     cost: number | null;
     paymentType: PaymentType;
     vendorId?: string | null;
+    deliveryDate?: string | null;
   }
 ) {
   const { supabase, businessId } = await getBusinessContext();
@@ -106,6 +117,7 @@ export async function updateShelfLifeEntry(
       cost: input.cost,
       payment_type: input.paymentType,
       vendor_id: input.vendorId || null,
+      ...(input.deliveryDate !== undefined ? { delivery_date: input.deliveryDate || null } : {}),
       ...(unexpiring ? { stock_deducted: false } : {}),
     })
     .eq("id", id)
