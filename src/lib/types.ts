@@ -87,12 +87,15 @@ export interface ConsignmentSettlement {
   consignment_settlement_items: ConsignmentSettlementItem[];
 }
 
+export type StaffRole = "staff" | "manager";
+
 export interface Staff {
   id: string;
   business_id: string;
   name: string;
   qr_url: string | null;
   hourly_rate: number | null;
+  role: StaffRole;
   created_at: string;
 }
 

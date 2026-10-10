@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getBusinessContext } from "@/lib/business";
+import type { StaffRole } from "@/lib/types";
 
-export async function addStaff(name: string, hourlyRate?: number | null) {
+export async function addStaff(name: string, hourlyRate?: number | null, role?: StaffRole) {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Enter a staff name.");
 
@@ -11,8 +12,8 @@ export async function addStaff(name: string, hourlyRate?: number | null) {
 
   const { data, error } = await supabase
     .from("staff")
-    .insert({ business_id: businessId, name: trimmed, hourly_rate: hourlyRate ?? null })
-    .select("id, business_id, name, qr_url, hourly_rate, created_at")
+    .insert({ business_id: businessId, name: trimmed, hourly_rate: hourlyRate ?? null, role: role ?? "staff" })
+    .select("id, business_id, name, qr_url, hourly_rate, role, created_at")
     .single();
   if (error) throw new Error(error.message);
 
@@ -25,6 +26,17 @@ export async function updateStaffRate(staffId: string, hourlyRate: number | null
   const { error } = await supabase
     .from("staff")
     .update({ hourly_rate: hourlyRate })
+    .eq("id", staffId)
+    .eq("business_id", businessId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/staff-payout");
+}
+
+export async function updateStaffRole(staffId: string, role: StaffRole) {
+  const { supabase, businessId } = await getBusinessContext();
+  const { error } = await supabase
+    .from("staff")
+    .update({ role })
     .eq("id", staffId)
     .eq("business_id", businessId);
   if (error) throw new Error(error.message);

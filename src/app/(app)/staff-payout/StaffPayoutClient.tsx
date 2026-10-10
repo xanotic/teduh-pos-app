@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { Staff, StaffPayout } from "@/lib/types";
+import type { Staff, StaffPayout, StaffRole } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { formatTime12h } from "@/lib/happyHour";
 import { QrModal } from "@/components/QrModal";
@@ -13,6 +13,7 @@ import {
   markStaffPayoutPaid,
   updateStaffPayoutName,
   updateStaffRate,
+  updateStaffRole,
   uploadStaffQr,
 } from "./actions";
 
@@ -162,7 +163,7 @@ export function StaffPayoutClient({ staff, payouts }: { staff: Staff[]; payouts:
               <option value="">— None —</option>
               {staff.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.role === "manager" ? `${s.name} (Manager)` : s.name}
                 </option>
               ))}
             </select>
@@ -310,8 +311,10 @@ function StaffManager({ staff }: { staff: Staff[] }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
   const [rate, setRate] = useState("");
+  const [role, setRole] = useState<StaffRole>("staff");
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<"all" | StaffRole>("all");
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -319,14 +322,17 @@ function StaffManager({ staff }: { staff: Staff[] }) {
     setError(null);
     startTransition(async () => {
       try {
-        await addStaff(name.trim(), rate === "" ? null : parseFloat(rate) || null);
+        await addStaff(name.trim(), rate === "" ? null : parseFloat(rate) || null, role);
         setName("");
         setRate("");
+        setRole("staff");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not add staff.");
       }
     });
   }
+
+  const visibleStaff = staff.filter((s) => roleFilter === "all" || s.role === roleFilter);
 
   return (
     <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
@@ -344,13 +350,21 @@ function StaffManager({ staff }: { staff: Staff[] }) {
 
       {open && (
         <div className="mt-4 border-t border-border pt-4">
-          <form onSubmit={handleAdd} className="mb-3 flex gap-2">
+          <form onSubmit={handleAdd} className="mb-3 flex flex-wrap gap-2">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Staff name"
-              className="input flex-1"
+              className="input min-w-[120px] flex-1"
             />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as StaffRole)}
+              className="input w-28 flex-none"
+            >
+              <option value="staff">Staff</option>
+              <option value="manager">Manager</option>
+            </select>
             <input
               type="number"
               step="0.1"
@@ -370,8 +384,25 @@ function StaffManager({ staff }: { staff: Staff[] }) {
           </form>
           {error && <p className="mb-3 text-xs font-semibold text-danger">{error}</p>}
 
+          {staff.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Role:</span>
+              {(["all", "staff", "manager"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    roleFilter === r ? "bg-accent text-white" : "bg-surface-alt text-ink-muted"
+                  }`}
+                >
+                  {r === "all" ? "All" : r === "staff" ? "Staff" : "Manager"}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
-            {staff.map((s) => (
+            {visibleStaff.map((s) => (
               <StaffRow
                 key={s.id}
                 staff={s}
@@ -381,6 +412,9 @@ function StaffManager({ staff }: { staff: Staff[] }) {
               />
             ))}
             {staff.length === 0 && <p className="text-sm text-ink-muted">No staff yet.</p>}
+            {staff.length > 0 && visibleStaff.length === 0 && (
+              <p className="text-sm text-ink-muted">No staff match.</p>
+            )}
           </div>
         </div>
       )}
@@ -404,6 +438,20 @@ function StaffRow({
   const [enlarged, setEnlarged] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [ratePending, startRateTransition] = useTransition();
+  const [rolePending, startRoleTransition] = useTransition();
+
+  function handleRoleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const newRole = e.target.value as StaffRole;
+    setError(null);
+    startRoleTransition(async () => {
+      try {
+        await updateStaffRole(staff.id, newRole);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed — try again.");
+        e.target.value = staff.role;
+      }
+    });
+  }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -453,6 +501,20 @@ function StaffRow({
         </div>
       )}
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{staff.name}</span>
+      <select
+        defaultValue={staff.role}
+        disabled={rolePending}
+        onChange={handleRoleChange}
+        title="Role"
+        className={`flex-none rounded-md border px-1.5 py-1 text-[11px] font-bold ${
+          staff.role === "manager"
+            ? "border-accent/40 bg-accent-soft text-accent"
+            : "border-border bg-bg text-ink-muted"
+        }`}
+      >
+        <option value="staff">Staff</option>
+        <option value="manager">Manager</option>
+      </select>
       <input
         type="number"
         step="0.1"
