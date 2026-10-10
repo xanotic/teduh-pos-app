@@ -201,7 +201,7 @@ export function CatalogCart({
             placeholder="Search item…"
             className="input mb-3"
           />
-          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+          <div className="mb-4 flex flex-wrap gap-2">
             {categories.map((c) => (
               <button
                 key={c}
