@@ -49,7 +49,7 @@ export function ItemsSoldPanel({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [vendorQuery, setVendorQuery] = useState("");
-  const [listOpen, setListOpen] = useState(true);
+  const [listOpen, setListOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 

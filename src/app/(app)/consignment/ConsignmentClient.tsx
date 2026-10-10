@@ -112,23 +112,6 @@ export function ConsignmentClient({
         paid on delivery) are excluded automatically.
       </p>
 
-      <button
-        type="button"
-        onClick={() => setSettlementsOpen((o) => !o)}
-        className="mb-3 flex w-full items-center justify-between gap-2 text-left"
-      >
-        <h2 className="text-sm font-bold text-ink">Past Settlements ({settlements.length})</h2>
-        <span className="text-ink-muted">{settlementsOpen ? "▲" : "▼"}</span>
-      </button>
-      {settlementsOpen && (
-        <div className="mb-6 flex flex-col gap-3">
-          {settlements.map((s) => (
-            <SettlementCard key={s.id} settlement={s} />
-          ))}
-          {settlements.length === 0 && <p className="text-sm text-ink-muted">No settlements logged yet.</p>}
-        </div>
-      )}
-
       {payoutCandidates.length === 0 ? (
         <div className="mb-6 rounded-2xl border border-border bg-surface p-6 text-center text-sm text-ink-muted shadow-sm">
           No consignment sales in this period.
@@ -280,6 +263,23 @@ export function ConsignmentClient({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setSettlementsOpen((o) => !o)}
+        className="mb-3 mt-6 flex w-full items-center justify-between gap-2 text-left"
+      >
+        <h2 className="text-sm font-bold text-ink">Past Settlements ({settlements.length})</h2>
+        <span className="text-ink-muted">{settlementsOpen ? "▲" : "▼"}</span>
+      </button>
+      {settlementsOpen && (
+        <div className="flex flex-col gap-3">
+          {settlements.map((s) => (
+            <SettlementCard key={s.id} settlement={s} />
+          ))}
+          {settlements.length === 0 && <p className="text-sm text-ink-muted">No settlements logged yet.</p>}
         </div>
       )}
 
