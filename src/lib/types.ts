@@ -124,6 +124,19 @@ export interface UpfrontPayout {
   created_at: string;
 }
 
+export interface ReturnEntry {
+  id: string;
+  business_id: string;
+  item: string;
+  vendor_id: string | null;
+  qty: number;
+  payment_type: PaymentType | null;
+  cost: number | null;
+  upfront_reversed: number | null;
+  note: string | null;
+  created_at: string;
+}
+
 export interface MiscExpense {
   id: string;
   business_id: string;
