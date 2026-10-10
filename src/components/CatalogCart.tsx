@@ -108,41 +108,19 @@ export function CatalogCart({
             className="input mb-3"
           />
           {vendors.length > 0 && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                onClick={() => setVendorFilter("ALL")}
-                className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
-                  vendorFilter === "ALL"
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border bg-surface text-ink-muted"
-                }`}
-              >
-                All
-              </button>
+            <select
+              value={vendorFilter}
+              onChange={(e) => setVendorFilter(e.target.value)}
+              className="input mb-4"
+            >
+              <option value="ALL">All vendors</option>
               {vendors.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => setVendorFilter(v.id)}
-                  className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
-                    vendorFilter === v.id
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border bg-surface text-ink-muted"
-                  }`}
-                >
+                <option key={v.id} value={v.id}>
                   {v.name}
-                </button>
+                </option>
               ))}
-              <button
-                onClick={() => setVendorFilter("NONE")}
-                className={`flex-none rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap ${
-                  vendorFilter === "NONE"
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border bg-surface text-ink-muted"
-                }`}
-              >
-                No vendor
-              </button>
-            </div>
+              <option value="NONE">No vendor</option>
+            </select>
           )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

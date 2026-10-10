@@ -9,7 +9,7 @@ import { computeStats } from "@/lib/analytics";
 import { updateTransaction, voidTransaction } from "@/lib/actions/sales";
 import { setActualClosing, setOpeningBalance } from "./tillActions";
 
-const PAY_METHODS: PaymentMethod[] = ["Cash", "QR Pay", "Giveaway"];
+const PAY_METHODS: PaymentMethod[] = ["Cash", "QR Pay"];
 
 export function HistoryClient({
   transactions,
@@ -53,7 +53,6 @@ export function HistoryClient({
   const stats = computeStats(transactions);
   const cash = stats.byPayment.find((p) => p.name === "Cash")?.revenue ?? 0;
   const qr = stats.byPayment.find((p) => p.name === "QR Pay")?.revenue ?? 0;
-  const giveaway = stats.byPayment.find((p) => p.name === "Giveaway");
   const dateLabel = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     weekday: "short",
     year: "numeric",
@@ -71,7 +70,6 @@ export function HistoryClient({
       `🔳 QR Pay: ${fmt(qr)}`,
       `📈 Est. Profit${stats.costPartial ? " (partial)" : ""}: ${stats.hasCost ? fmt(stats.profit) : "— (no cost set)"}`,
       `🧾 Orders: ${stats.orders}`,
-      `🎁 Giveaways: ${giveaway?.count ?? 0}${giveaway && giveaway.revenue > 0 ? ` (${fmt(giveaway.revenue)})` : ""}`,
     ];
     return lines.join("\n");
   }
@@ -167,7 +165,7 @@ export function HistoryClient({
 
       <div className="mb-3 flex items-center gap-2">
         <div className="flex flex-1 gap-1 rounded-xl bg-surface-alt p-1">
-          {(["All", "Cash", "QR Pay", "Giveaway"] as const).map((m) => (
+          {(["All", "Cash", "QR Pay"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMethodFilter(m)}
@@ -175,7 +173,7 @@ export function HistoryClient({
                 methodFilter === m ? "bg-accent text-white" : "text-ink-muted hover:text-ink"
               }`}
             >
-              {m === "QR Pay" ? "🔳 QR" : m === "Cash" ? "💵 Cash" : m === "Giveaway" ? "🎁 Giveaway" : "All"}
+              {m === "QR Pay" ? "🔳 QR" : m === "Cash" ? "💵 Cash" : "All"}
             </button>
           ))}
         </div>
