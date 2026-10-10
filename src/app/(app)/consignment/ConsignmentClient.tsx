@@ -34,6 +34,7 @@ export function ConsignmentClient({
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [costOverrides, setCostOverrides] = useState<Record<string, string>>({});
   const [enlargedQr, setEnlargedQr] = useState<{ url: string; label: string } | null>(null);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -116,64 +117,8 @@ export function ConsignmentClient({
         </div>
       ) : (
         <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-          <div className="flex flex-col gap-2">
-            {payoutCandidates.map((r) => {
-              const isExcluded = excluded.has(r.name);
-              return (
-                <div
-                  key={r.name}
-                  className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
-                    isExcluded ? "border-border bg-surface-alt opacity-60" : "border-border bg-bg"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleExclude(r.name)}
-                    className={`rounded-md px-2 py-1 text-xs font-bold ${
-                      isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
-                    }`}
-                    title={isExcluded ? "Include in payout" : "Exclude from payout"}
-                  >
-                    {isExcluded ? "Excluded" : "✓ Included"}
-                  </button>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                    {r.name} <span className="font-normal text-ink-muted">· sold {r.qty}</span>
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                      r.type === "unknown" ? "bg-surface-alt text-gold" : "bg-accent-soft text-accent"
-                    }`}
-                    title="Set on the Menu tab"
-                  >
-                    {r.type === "unknown" ? "Not set — fix on Menu" : r.type === "consignment" ? "Consignment" : "Upfront"}
-                  </span>
-                  {!r.vendorId && !isExcluded && (
-                    <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-bold text-ink-muted">
-                      No vendor — set on Menu
-                    </span>
-                  )}
-                  {r.hasMissingCost ? (
-                    <input
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      value={costOverrides[r.name] ?? ""}
-                      onChange={(e) => setCostOverrides((prev) => ({ ...prev, [r.name]: e.target.value }))}
-                      placeholder="Cost owed"
-                      className="input w-28"
-                      disabled={isExcluded}
-                    />
-                  ) : (
-                    <span className="font-bold text-ink">{fmt(r.cost)}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
-
           {rows.length > 0 && (
-            <div className="mt-4 rounded-xl border border-border bg-bg p-3">
+            <div className="rounded-xl border border-border bg-bg p-3">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide text-ink-muted">To pay, by vendor</span>
                 <span className="text-lg font-extrabold text-accent">{fmt(totalOwed)}</span>
@@ -227,7 +172,8 @@ export function ConsignmentClient({
 
               {anyMissingCost && (
                 <p className="mt-3 text-xs text-gold">
-                  Some items have no cost set — enter a cost owed above or they won&apos;t be included in the total.
+                  Some items have no cost set — enter a cost owed in &quot;Adjust items&quot; below, or they won&apos;t be
+                  included in the total.
                 </p>
               )}
             </div>
@@ -248,6 +194,74 @@ export function ConsignmentClient({
           </button>
           {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
           {savedMsg && <p className="mt-2 text-xs font-semibold text-success">{savedMsg}</p>}
+
+          <button
+            type="button"
+            onClick={() => setAdjustOpen((o) => !o)}
+            className="mt-4 flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-left"
+          >
+            <span className="text-xs font-bold text-ink-muted">
+              ⚙️ Adjust items (exclude an item, fix a missing cost)
+            </span>
+            <span className="text-ink-muted">{adjustOpen ? "▲" : "▼"}</span>
+          </button>
+
+          {adjustOpen && (
+            <div className="mt-2 flex flex-col gap-2">
+              {payoutCandidates.map((r) => {
+                const isExcluded = excluded.has(r.name);
+                return (
+                  <div
+                    key={r.name}
+                    className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 ${
+                      isExcluded ? "border-border bg-surface-alt opacity-60" : "border-border bg-bg"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleExclude(r.name)}
+                      className={`rounded-md px-2 py-1 text-xs font-bold ${
+                        isExcluded ? "bg-surface text-ink-muted" : "bg-success-soft text-success"
+                      }`}
+                      title={isExcluded ? "Include in payout" : "Exclude from payout"}
+                    >
+                      {isExcluded ? "Excluded" : "✓ Included"}
+                    </button>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                      {r.name} <span className="font-normal text-ink-muted">· sold {r.qty}</span>
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        r.type === "unknown" ? "bg-surface-alt text-gold" : "bg-accent-soft text-accent"
+                      }`}
+                      title="Set on the Menu tab"
+                    >
+                      {r.type === "unknown" ? "Not set — fix on Menu" : r.type === "consignment" ? "Consignment" : "Upfront"}
+                    </span>
+                    {!r.vendorId && !isExcluded && (
+                      <span className="rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-bold text-ink-muted">
+                        No vendor — set on Menu
+                      </span>
+                    )}
+                    {r.hasMissingCost ? (
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        value={costOverrides[r.name] ?? ""}
+                        onChange={(e) => setCostOverrides((prev) => ({ ...prev, [r.name]: e.target.value }))}
+                        placeholder="Cost owed"
+                        className="input w-28"
+                        disabled={isExcluded}
+                      />
+                    ) : (
+                      <span className="font-bold text-ink">{fmt(r.cost)}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

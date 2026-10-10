@@ -49,6 +49,7 @@ export function ItemsSoldPanel({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [vendorQuery, setVendorQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
@@ -146,11 +147,23 @@ export function ItemsSoldPanel({
 
   return (
     <div className="mb-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="mb-3 flex w-full flex-wrap items-center justify-between gap-3 text-left"
+      >
         <div>
           <h2 className="text-sm font-bold text-ink">📦 Items Sold — {label}</h2>
-          <p className="text-xs text-ink-muted">One-click view of what actually sold on the POS.</p>
+          <p className="text-xs text-ink-muted">
+            {totalQty} item{totalQty === 1 ? "" : "s"} · {fmt(totalCost)} — tap to {open ? "collapse" : "review"}
+          </p>
         </div>
+        <span className="text-ink-muted">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-lg bg-surface-alt p-1">
             <button
@@ -324,6 +337,8 @@ export function ItemsSoldPanel({
         </>
       ) : (
         <p className="text-sm text-ink-muted">No sales in this period.</p>
+      )}
+        </>
       )}
     </div>
   );
