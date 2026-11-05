@@ -185,6 +185,10 @@ export function CatalogCart({
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search item, or scan a barcode…"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="input mb-3"
           />
           {vendors.length > 0 && (
