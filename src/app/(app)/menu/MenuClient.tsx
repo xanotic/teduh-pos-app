@@ -511,28 +511,47 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
+  // Real label is 12mm (tall) x 40mm (wide) — drawn at 20px/mm so the printed
+  // result stays sharp. The QR only needs to be as tall as the label itself;
+  // everything else on the strip goes to the text, which is what was cramped
+  // before (it used to share a near-square canvas evenly with the QR).
   async function buildLabel(item: MenuItem) {
+    const PX_PER_MM = 20;
+    const W = 40 * PX_PER_MM; // 800
+    const H = 12 * PX_PER_MM; // 240
+    const PAD = 10;
+    const qrSize = H - PAD * 2; // 220 — fills the label's full height
+
     const qrDataUrl = await QRCode.toDataURL(`${ITEM_QR_PREFIX}${item.id}`, {
-      margin: 1,
-      width: 420,
+      margin: 0,
+      width: qrSize,
     });
     const qrImg = await loadImage(qrDataUrl);
 
     const canvas = document.createElement("canvas");
-    canvas.width = 500;
-    canvas.height = 300;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(qrImg, 40, 10, 280, 280);
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(qrImg, PAD, PAD, qrSize, qrSize);
+
+    const textX = PAD + qrSize + 24;
+    const textMaxWidth = W - textX - PAD;
     ctx.fillStyle = "#000000";
     ctx.textAlign = "left";
-    ctx.font = "bold 28px sans-serif";
-    wrapText(ctx, item.name, 335, 100, 150, 32);
-    if (item.price > 0) {
-      ctx.font = "bold 24px sans-serif";
-      ctx.fillText(`RM ${item.price.toFixed(2)}`, 335, 230);
+
+    const hasPrice = item.price > 0;
+    const nameY = hasPrice ? H / 2 - 18 : H / 2 + 20;
+    const nameSize = fitFontSize(ctx, item.name, textMaxWidth, 72, 34);
+    ctx.font = `bold ${nameSize}px sans-serif`;
+    ctx.fillText(truncateToWidth(ctx, item.name, textMaxWidth), textX, nameY);
+
+    if (hasPrice) {
+      ctx.font = "bold 40px sans-serif";
+      ctx.fillText(`RM ${item.price.toFixed(2)}`, textX, H / 2 + 50);
     }
+
     return canvas.toDataURL("image/png");
   }
 
@@ -544,21 +563,24 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
     });
   }
 
-  function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
-    const words = text.split(" ");
-    let line = "";
-    let curY = y;
-    for (const word of words) {
-      const test = line ? `${line} ${word}` : word;
-      if (ctx.measureText(test).width > maxWidth && line) {
-        ctx.fillText(line, x, curY);
-        line = word;
-        curY += lineHeight;
-      } else {
-        line = test;
-      }
+  // Shrinks the font until the text fits on one line, down to a floor size.
+  function fitFontSize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, startSize: number, minSize: number) {
+    let size = startSize;
+    while (size > minSize) {
+      ctx.font = `bold ${size}px sans-serif`;
+      if (ctx.measureText(text).width <= maxWidth) return size;
+      size -= 2;
     }
-    if (line) ctx.fillText(line, x, curY);
+    return minSize;
+  }
+
+  function truncateToWidth(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let truncated = text;
+    while (truncated.length > 1 && ctx.measureText(`${truncated}…`).width > maxWidth) {
+      truncated = truncated.slice(0, -1);
+    }
+    return `${truncated}…`;
   }
 
   return (
@@ -571,7 +593,12 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
         {dataUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={dataUrl} alt={`QR label for ${item.name}`} className="mb-3 w-full rounded-lg border border-border" />
+            <img
+              src={dataUrl}
+              alt={`QR label for ${item.name}`}
+              className="mb-3 w-full rounded-lg border border-border bg-white object-contain"
+            />
+            <p className="mb-2 text-[11px] text-ink-muted">Sized for a 12mm × 40mm label.</p>
             <a
               href={dataUrl}
               download={`${item.name.replace(/[^a-z0-9]+/gi, "-")}-label.png`}
