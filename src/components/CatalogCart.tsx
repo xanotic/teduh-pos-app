@@ -28,13 +28,26 @@ export function CatalogCart({
     searchRef.current?.focus();
   }, []);
 
-  const visible = items.filter((it) => {
-    const matchVendor =
-      vendorFilter === "ALL" ||
-      (vendorFilter === "NONE" ? !it.vendor_id : it.vendor_id === vendorFilter);
-    const matchSearch = !search || it.name.toLowerCase().includes(search.toLowerCase());
-    return matchVendor && matchSearch;
-  });
+  // While a scan is still arriving character-by-character, `search` is mid-way
+  // through becoming a "TEDUH-ITEM:<uuid>" code — re-filtering the whole grid
+  // on every single one of those characters is what made typing look laggy on
+  // slower hardware (a Bluetooth scanner's per-character HID events land one
+  // render apart, same as real typing, so each one re-ran this filter). Skip
+  // the grid filter entirely for as long as the text still looks like a scan.
+  const looksLikeScanInProgress =
+    search.length > 0 && (ITEM_QR_PREFIX.startsWith(search) || search.startsWith(ITEM_QR_PREFIX));
+
+  const visible = useMemo(() => {
+    if (looksLikeScanInProgress) return [];
+    return items.filter((it) => {
+      const matchVendor =
+        vendorFilter === "ALL" ||
+        (vendorFilter === "NONE" ? !it.vendor_id : it.vendor_id === vendorFilter);
+      const matchSearch = !search || it.name.toLowerCase().includes(search.toLowerCase());
+      return matchVendor && matchSearch;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, vendorFilter, search, looksLikeScanInProgress]);
 
   function addToCart(item: MenuItem) {
     if (!(item.price > 0)) {
@@ -114,12 +127,13 @@ export function CatalogCart({
     setTimeout(() => setToast(null), 1800);
   }
 
-  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-    const value = search.trim();
-    if (!value.startsWith(ITEM_QR_PREFIX)) return; // plain typing — let it just filter as usual
+  // A scanned id is always this exact length ("TEDUH-ITEM:" + a 36-char uuid),
+  // so we can act the instant that length is reached instead of waiting for
+  // the scanner's Enter keystroke — some Bluetooth scanners send Enter late
+  // or drop it, which was adding a visible delay on top of the HID typing lag.
+  const SCANNED_CODE_LENGTH = ITEM_QR_PREFIX.length + 36;
 
-    e.preventDefault();
+  function processScan(value: string) {
     const itemId = value.slice(ITEM_QR_PREFIX.length);
     const item = items.find((i) => i.id === itemId);
     setSearch("");
@@ -130,6 +144,22 @@ export function CatalogCart({
       showToast("Unknown barcode — item not found");
     }
     searchRef.current?.focus();
+  }
+
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setSearch(value);
+    if (value.startsWith(ITEM_QR_PREFIX) && value.length >= SCANNED_CODE_LENGTH) {
+      processScan(value.trim());
+    }
+  }
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    const value = search.trim();
+    if (!value.startsWith(ITEM_QR_PREFIX)) return; // plain typing — let it just filter as usual
+    e.preventDefault();
+    processScan(value); // fallback for scanners that do send Enter
   }
 
   function checkout(paymentMethod: PaymentMethod) {
@@ -152,7 +182,7 @@ export function CatalogCart({
           <input
             ref={searchRef}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search item, or scan a barcode…"
             className="input mb-3"
