@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CartLine, MenuItem, PaymentMethod, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { finalizeSale } from "@/lib/actions/sales";
-import { ITEM_QR_PREFIX } from "@/lib/itemQr";
+import { ITEM_QR_PREFIX, SKU_BARCODE_PREFIX, SKU_DIGITS, parseSkuBarcode } from "@/lib/itemQr";
+
+// Matches a sku barcode once it's fully typed ("T00042"), and a partial match
+// while it's still arriving ("T", "T0", "T004"…) so we know we're mid-scan
+// without false-triggering on a real item name that happens to start with T.
+const SKU_COMPLETE_PATTERN = new RegExp(`^${SKU_BARCODE_PREFIX}\\d{${SKU_DIGITS}}$`);
+const SKU_PARTIAL_PATTERN = new RegExp(`^${SKU_BARCODE_PREFIX}\\d{0,${SKU_DIGITS}}$`);
 
 export function CatalogCart({
   items,
@@ -28,14 +34,16 @@ export function CatalogCart({
     searchRef.current?.focus();
   }, []);
 
-  // While a scan is still arriving character-by-character, `search` is mid-way
-  // through becoming a "TEDUH-ITEM:<uuid>" code — re-filtering the whole grid
-  // on every single one of those characters is what made typing look laggy on
-  // slower hardware (a Bluetooth scanner's per-character HID events land one
-  // render apart, same as real typing, so each one re-ran this filter). Skip
-  // the grid filter entirely for as long as the text still looks like a scan.
+  // While a scan is still arriving character-by-character, re-filtering the
+  // whole grid on every single one of those characters is what made typing
+  // look laggy on slower hardware (a Bluetooth scanner's per-character HID
+  // events land one render apart, same as real typing, so each one re-ran
+  // this filter). Skip the grid filter entirely for as long as the text still
+  // looks like a scan in progress (new short sku codes, or an old long-form
+  // QR code from a label printed before the switch to barcodes).
   const looksLikeScanInProgress =
-    search.length > 0 && (ITEM_QR_PREFIX.startsWith(search) || search.startsWith(ITEM_QR_PREFIX));
+    search.length > 0 &&
+    (SKU_PARTIAL_PATTERN.test(search) || ITEM_QR_PREFIX.startsWith(search) || search.startsWith(ITEM_QR_PREFIX));
 
   const visible = useMemo(() => {
     if (looksLikeScanInProgress) return [];
@@ -127,15 +135,25 @@ export function CatalogCart({
     setTimeout(() => setToast(null), 1800);
   }
 
-  // A scanned id is always this exact length ("TEDUH-ITEM:" + a 36-char uuid),
-  // so we can act the instant that length is reached instead of waiting for
-  // the scanner's Enter keystroke — some Bluetooth scanners send Enter late
-  // or drop it, which was adding a visible delay on top of the HID typing lag.
-  const SCANNED_CODE_LENGTH = ITEM_QR_PREFIX.length + 36;
+  // A legacy QR-format id is always this exact length ("TEDUH-ITEM:" + a
+  // 36-char uuid) — new sku barcodes are matched via SKU_COMPLETE_PATTERN
+  // instead. Either way we act the instant the full code is reached rather
+  // than waiting for the scanner's Enter keystroke — some Bluetooth scanners
+  // send Enter late or drop it, adding a visible delay on top of the HID lag.
+  const LEGACY_QR_CODE_LENGTH = ITEM_QR_PREFIX.length + 36;
+
+  function findScannedItem(value: string): MenuItem | undefined {
+    const sku = parseSkuBarcode(value);
+    if (sku != null) return items.find((i) => i.sku === sku);
+    if (value.startsWith(ITEM_QR_PREFIX)) {
+      const itemId = value.slice(ITEM_QR_PREFIX.length);
+      return items.find((i) => i.id === itemId);
+    }
+    return undefined;
+  }
 
   function processScan(value: string) {
-    const itemId = value.slice(ITEM_QR_PREFIX.length);
-    const item = items.find((i) => i.id === itemId);
+    const item = findScannedItem(value);
     setSearch("");
     if (item) {
       addToCart(item);
@@ -149,15 +167,18 @@ export function CatalogCart({
   function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setSearch(value);
-    if (value.startsWith(ITEM_QR_PREFIX) && value.length >= SCANNED_CODE_LENGTH) {
-      processScan(value.trim());
+    const trimmed = value.trim();
+    if (SKU_COMPLETE_PATTERN.test(trimmed)) {
+      processScan(trimmed);
+    } else if (trimmed.startsWith(ITEM_QR_PREFIX) && trimmed.length >= LEGACY_QR_CODE_LENGTH) {
+      processScan(trimmed);
     }
   }
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     const value = search.trim();
-    if (!value.startsWith(ITEM_QR_PREFIX)) return; // plain typing — let it just filter as usual
+    if (!SKU_COMPLETE_PATTERN.test(value) && !value.startsWith(ITEM_QR_PREFIX)) return; // plain typing
     e.preventDefault();
     processScan(value); // fallback for scanners that do send Enter
   }

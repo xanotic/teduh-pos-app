@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import QRCode from "qrcode";
+import JsBarcode from "jsbarcode";
 import type { MenuItem, PaymentType, Vendor } from "@/lib/types";
 import { addMenuItem, deleteMenuItem, resetAllStock, updateMenuItem } from "./actions";
 import { resetItemBatches } from "../shelf-life/actions";
 import { importLegacyBackup } from "./importActions";
-import { ITEM_QR_PREFIX } from "@/lib/itemQr";
+import { skuToBarcode } from "@/lib/itemQr";
 
 const SUPPLY_LABEL: Record<PaymentType, string> = {
   consignment: "Consignment",
@@ -494,7 +494,7 @@ function MenuRow({
           className="flex-none rounded-md bg-surface-alt px-2 py-1 text-[11px] font-bold text-ink-muted"
           title="Print a scannable label for this item"
         >
-          🏷 QR
+          🏷 Barcode
         </button>
       </div>
       {error && <p className="mt-1 text-xs font-semibold text-danger">{error}</p>}
@@ -512,21 +512,30 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
   }, [item.id]);
 
   // Real label is 12mm (tall) x 40mm (wide) — drawn at 20px/mm so the printed
-  // result stays sharp. The QR only needs to be as tall as the label itself;
-  // everything else on the strip goes to the text, which is what was cramped
-  // before (it used to share a near-square canvas evenly with the QR).
+  // result stays sharp. A 1D barcode (Code128) is used instead of a QR here:
+  // for the same physical size, 1D bars can be drawn much wider per encoded
+  // character than a QR's modules, which is what actually lets a scanner read
+  // it from further away — the tradeoff is it needs a short code, which is
+  // why each item gets a short numeric sku instead of encoding its full uuid.
   async function buildLabel(item: MenuItem) {
     const PX_PER_MM = 20;
     const W = 40 * PX_PER_MM; // 800
     const H = 12 * PX_PER_MM; // 240
     const PAD = 10;
-    const qrSize = H - PAD * 2; // 220 — fills the label's full height
+    const nameRowH = 46;
+    const priceRowH = 40;
+    const barcodeMaxH = H - nameRowH - priceRowH;
 
-    const qrDataUrl = await QRCode.toDataURL(`${ITEM_QR_PREFIX}${item.id}`, {
+    const barcodeCanvas = document.createElement("canvas");
+    JsBarcode(barcodeCanvas, skuToBarcode(item.sku), {
+      format: "CODE128",
+      displayValue: false,
       margin: 0,
-      width: qrSize,
+      width: 6, // as wide as possible per bar — the whole point of switching off QR
+      height: barcodeMaxH,
+      background: "#ffffff",
+      lineColor: "#000000",
     });
-    const qrImg = await loadImage(qrDataUrl);
 
     const canvas = document.createElement("canvas");
     canvas.width = W;
@@ -534,33 +543,28 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(qrImg, PAD, PAD, qrSize, qrSize);
-
-    const textX = PAD + qrSize + 24;
-    const textMaxWidth = W - textX - PAD;
     ctx.fillStyle = "#000000";
-    ctx.textAlign = "left";
+    ctx.textAlign = "center";
 
-    const hasPrice = item.price > 0;
-    const nameY = hasPrice ? H / 2 - 18 : H / 2 + 20;
-    const nameSize = fitFontSize(ctx, item.name, textMaxWidth, 72, 34);
+    // Name, centered, shrunk to fit on one line.
+    const nameSize = fitFontSize(ctx, item.name, W - PAD * 2, 32, 18);
     ctx.font = `bold ${nameSize}px sans-serif`;
-    ctx.fillText(truncateToWidth(ctx, item.name, textMaxWidth), textX, nameY);
+    ctx.fillText(truncateToWidth(ctx, item.name, W - PAD * 2), W / 2, 30);
 
-    if (hasPrice) {
-      ctx.font = "bold 40px sans-serif";
-      ctx.fillText(`RM ${item.price.toFixed(2)}`, textX, H / 2 + 50);
+    // Barcode, scaled down only if it doesn't already fit (never upscaled,
+    // which would just blur the bars instead of helping).
+    const availableW = W - PAD * 2;
+    const scale = Math.min(1, availableW / barcodeCanvas.width);
+    const destW = barcodeCanvas.width * scale;
+    const destH = barcodeCanvas.height * scale;
+    ctx.drawImage(barcodeCanvas, (W - destW) / 2, nameRowH, destW, destH);
+
+    if (item.price > 0) {
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillText(`RM ${item.price.toFixed(2)}`, W / 2, H - 10);
     }
 
     return canvas.toDataURL("image/png");
-  }
-
-  function loadImage(src: string): Promise<HTMLImageElement> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.src = src;
-    });
   }
 
   // Shrinks the font until the text fits on one line, down to a floor size.
@@ -595,7 +599,7 @@ function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={dataUrl}
-              alt={`QR label for ${item.name}`}
+              alt={`Barcode label for ${item.name}`}
               className="mb-3 w-full rounded-lg border border-border bg-white object-contain"
             />
             <p className="mb-2 text-[11px] text-ink-muted">Sized for a 12mm × 40mm label.</p>
