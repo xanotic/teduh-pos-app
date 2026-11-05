@@ -21,6 +21,7 @@ export interface TransactionItem {
   price: number;
   cost: number | null;
   qty: number;
+  is_expiry_sale?: boolean;
 }
 
 export interface Transaction {
@@ -154,6 +155,7 @@ export interface CartLine {
   price: number;
   cost: number | null;
   qty: number;
+  isExpirySale?: boolean;
 }
 
 

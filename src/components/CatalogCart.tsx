@@ -57,6 +57,28 @@ export function CatalogCart({
     });
   }
 
+  function toggleExpirySale(itemId: string) {
+    setCart((prev) =>
+      prev.map((l) => {
+        if (l.itemId !== itemId) return l;
+        if (l.isExpirySale) {
+          // Turning it off reverts to the normal catalog price/cost.
+          const item = items.find((i) => i.id === itemId);
+          return { ...l, isExpirySale: false, price: item?.price ?? l.price, cost: item?.cost ?? l.cost };
+        }
+        // Default the expiry price to half the normal price — staff can edit it.
+        const halfPrice = Math.round((l.price / 2) * 100) / 100;
+        return { ...l, isExpirySale: true, price: halfPrice, cost: halfPrice };
+      })
+    );
+  }
+
+  function setExpiryPrice(itemId: string, price: number) {
+    setCart((prev) =>
+      prev.map((l) => (l.itemId === itemId ? { ...l, price, cost: price } : l))
+    );
+  }
+
   function changeQty(itemId: string, delta: number) {
     if (delta > 0) {
       const item = items.find((i) => i.id === itemId);
@@ -176,28 +198,66 @@ export function CatalogCart({
 
           <div className="flex flex-col gap-2">
             {cart.map((l) => {
+              const catalogItem = items.find((i) => i.id === l.itemId);
               return (
-                <div key={l.itemId} className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate text-sm font-semibold text-ink">{l.name}</div>
-                    <div className="text-xs text-ink-muted">{fmt(l.price)} each</div>
+                <div
+                  key={l.itemId}
+                  className={`rounded-xl px-3 py-2 ${l.isExpirySale ? "bg-danger-soft" : "bg-bg"}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-sm font-semibold text-ink">{l.name}</div>
+                      {l.isExpirySale ? (
+                        <div className="text-xs font-bold text-danger">⏰ Expiry price — vendor covers it</div>
+                      ) : (
+                        <div className="text-xs text-ink-muted">{fmt(l.price)} each</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-1">
+                      <button
+                        onClick={() => changeQty(l.itemId, -1)}
+                        className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="w-4 text-center text-sm font-bold">{l.qty}</span>
+                      <button
+                        onClick={() => changeQty(l.itemId, 1)}
+                        className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="w-14 text-right text-sm font-bold">{fmt(l.price * l.qty)}</span>
                   </div>
-                  <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-1">
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
                     <button
-                      onClick={() => changeQty(l.itemId, -1)}
-                      className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold"
+                      onClick={() => toggleExpirySale(l.itemId)}
+                      className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                        l.isExpirySale ? "bg-danger text-white" : "border border-border text-ink-muted"
+                      }`}
                     >
-                      −
+                      ⏰ {l.isExpirySale ? "Expiry sale" : "Mark as expiry sale"}
                     </button>
-                    <span className="w-4 text-center text-sm font-bold">{l.qty}</span>
-                    <button
-                      onClick={() => changeQty(l.itemId, 1)}
-                      className="h-6 w-6 rounded-full bg-surface-alt text-sm font-bold"
-                    >
-                      +
-                    </button>
+                    {l.isExpirySale && (
+                      <label className="flex items-center gap-1 text-[11px] font-semibold text-ink-muted">
+                        Price each
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.10"
+                          value={l.price}
+                          onChange={(e) => setExpiryPrice(l.itemId, Number(e.target.value) || 0)}
+                          className="w-16 rounded-md border border-border bg-surface px-1.5 py-0.5 text-right text-xs font-bold text-ink"
+                        />
+                      </label>
+                    )}
                   </div>
-                  <span className="w-14 text-right text-sm font-bold">{fmt(l.price * l.qty)}</span>
+                  {l.isExpirySale && catalogItem && (
+                    <div className="mt-1 text-[11px] text-ink-muted">
+                      Normal price {fmt(catalogItem.price)} — no profit is taken on this sale, vendor is paid {fmt(l.price)} instead of the usual cost.
+                    </div>
+                  )}
                 </div>
               );
             })}

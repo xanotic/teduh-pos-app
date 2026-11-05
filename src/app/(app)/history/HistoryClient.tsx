@@ -471,7 +471,7 @@ function TxnCard({ txn, menuItems }: { txn: Transaction; menuItems: MenuItem[] }
         <span className="text-sm font-bold text-ink">{fmt(Number(txn.total))}</span>
       </div>
       <div className="mt-1 text-sm text-ink-muted">
-        {txn.transaction_items.map((i) => `${i.qty}× ${i.name}`).join(", ")}
+        {txn.transaction_items.map((i) => `${i.is_expiry_sale ? "⏰" : ""}${i.qty}× ${i.name}`).join(", ")}
       </div>
       <div className="mt-2 flex gap-2">
         <button

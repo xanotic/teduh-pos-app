@@ -107,8 +107,13 @@ export async function finalizeSale(paymentMethod: PaymentMethod, lines: CartLine
       name: l.name,
       category: l.category,
       price: l.price,
-      cost: l.cost,
+      // An expiry sale means the vendor absorbs the full discount — cost owed
+      // to them is forced to match what was actually collected, so this line
+      // nets zero profit and consignment payout (which reads this same `cost`
+      // column) doesn't overcharge the vendor for a sale that made no margin.
+      cost: l.isExpirySale ? l.price : l.cost,
       qty: l.qty,
+      is_expiry_sale: l.isExpirySale ?? false,
     }))
   );
   if (itemsError) throw new Error(itemsError.message);
