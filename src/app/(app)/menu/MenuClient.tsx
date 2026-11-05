@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import QRCode from "qrcode";
 import type { MenuItem, PaymentType, Vendor } from "@/lib/types";
 import { addMenuItem, deleteMenuItem, resetAllStock, updateMenuItem } from "./actions";
 import { resetItemBatches } from "../shelf-life/actions";
 import { importLegacyBackup } from "./importActions";
+import { ITEM_QR_PREFIX } from "@/lib/itemQr";
 
 const SUPPLY_LABEL: Record<PaymentType, string> = {
   consignment: "Consignment",
@@ -329,6 +331,7 @@ function MenuRow({
   const [error, setError] = useState<string | null>(null);
   const [resetPending, startResetTransition] = useTransition();
   const [confirmZero, setConfirmZero] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   function save(patch: Parameters<typeof updateMenuItem>[1], revert: () => void) {
     setError(null);
@@ -485,8 +488,108 @@ function MenuRow({
         >
           {confirming ? "✔" : "✕"}
         </button>
+        <button
+          type="button"
+          onClick={() => setShowQr(true)}
+          className="flex-none rounded-md bg-surface-alt px-2 py-1 text-[11px] font-bold text-ink-muted"
+          title="Print a scannable label for this item"
+        >
+          🏷 QR
+        </button>
       </div>
       {error && <p className="mt-1 text-xs font-semibold text-danger">{error}</p>}
+      {showQr && <QrLabelModal item={item} onClose={() => setShowQr(false)} />}
+    </div>
+  );
+}
+
+function QrLabelModal({ item, onClose }: { item: MenuItem; onClose: () => void }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    buildLabel(item).then(setDataUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  async function buildLabel(item: MenuItem) {
+    const qrDataUrl = await QRCode.toDataURL(`${ITEM_QR_PREFIX}${item.id}`, {
+      margin: 1,
+      width: 420,
+    });
+    const qrImg = await loadImage(qrDataUrl);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 500;
+    canvas.height = 300;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(qrImg, 40, 10, 280, 280);
+    ctx.fillStyle = "#000000";
+    ctx.textAlign = "left";
+    ctx.font = "bold 28px sans-serif";
+    wrapText(ctx, item.name, 335, 100, 150, 32);
+    if (item.price > 0) {
+      ctx.font = "bold 24px sans-serif";
+      ctx.fillText(`RM ${item.price.toFixed(2)}`, 335, 230);
+    }
+    return canvas.toDataURL("image/png");
+  }
+
+  function loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.src = src;
+    });
+  }
+
+  function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+    const words = text.split(" ");
+    let line = "";
+    let curY = y;
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        ctx.fillText(line, x, curY);
+        line = word;
+        curY += lineHeight;
+      } else {
+        line = test;
+      }
+    }
+    if (line) ctx.fillText(line, x, curY);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xs rounded-2xl bg-surface p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-2 text-sm font-bold text-ink">Label — {item.name}</h3>
+        {dataUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={dataUrl} alt={`QR label for ${item.name}`} className="mb-3 w-full rounded-lg border border-border" />
+            <a
+              href={dataUrl}
+              download={`${item.name.replace(/[^a-z0-9]+/gi, "-")}-label.png`}
+              className="mb-2 block rounded-lg bg-accent px-4 py-2 text-center text-sm font-bold text-white"
+            >
+              Download label (PNG)
+            </a>
+            <p className="mb-3 text-xs text-ink-muted">
+              Download, then open it in the Niimbot app (import from gallery) and print as usual.
+            </p>
+          </>
+        ) : (
+          <p className="mb-3 text-sm text-ink-muted">Generating…</p>
+        )}
+        <button onClick={onClose} className="w-full rounded-lg border border-border py-2 text-sm font-bold text-ink-muted">
+          Close
+        </button>
+      </div>
     </div>
   );
 }

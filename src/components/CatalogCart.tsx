@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CartLine, MenuItem, PaymentMethod, Vendor } from "@/lib/types";
 import { fmt } from "@/lib/format";
 import { finalizeSale } from "@/lib/actions/sales";
+import { ITEM_QR_PREFIX } from "@/lib/itemQr";
 
 export function CatalogCart({
   items,
@@ -17,8 +18,15 @@ export function CatalogCart({
   const [cart, setCart] = useState<CartLine[]>([]);
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
+
+  // Keep the search box focused so a USB/Bluetooth barcode scanner (which just
+  // "types" into whatever input is focused) can be scanned into straight away.
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
 
   const visible = items.filter((it) => {
     const matchVendor =
@@ -106,6 +114,24 @@ export function CatalogCart({
     setTimeout(() => setToast(null), 1800);
   }
 
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    const value = search.trim();
+    if (!value.startsWith(ITEM_QR_PREFIX)) return; // plain typing — let it just filter as usual
+
+    e.preventDefault();
+    const itemId = value.slice(ITEM_QR_PREFIX.length);
+    const item = items.find((i) => i.id === itemId);
+    setSearch("");
+    if (item) {
+      addToCart(item);
+      showToast(`Scanned: ${item.name}`);
+    } else {
+      showToast("Unknown barcode — item not found");
+    }
+    searchRef.current?.focus();
+  }
+
   function checkout(paymentMethod: PaymentMethod) {
     if (!cart.length) return;
     startTransition(async () => {
@@ -124,9 +150,11 @@ export function CatalogCart({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         <div>
           <input
+            ref={searchRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search item…"
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search item, or scan a barcode…"
             className="input mb-3"
           />
           {vendors.length > 0 && (
