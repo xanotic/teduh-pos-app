@@ -20,29 +20,33 @@ export function CatalogCart({
   vendors?: Vendor[];
 }) {
   const [search, setSearch] = useState("");
+  const [scanBuffer, setScanBuffer] = useState("");
   const [vendorFilter, setVendorFilter] = useState("ALL");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [pending, startTransition] = useTransition();
   const [toast, setToast] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
 
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
-  // Keep the search box focused so a USB/Bluetooth barcode scanner (which just
-  // "types" into whatever input is focused) always has somewhere to type into
-  // — without this, tapping a grid item, a qty +/-, or anywhere else on the
+  // A separate, invisible input is the default focus target for scanning —
+  // it has inputMode="none" so no on-screen keyboard ever pops up for it,
+  // unlike the visible search box. Scanner "typing" lands there by default;
+  // without this, tapping a grid item, a qty +/-, or anywhere else on the
   // page moves focus away and the next scan silently does nothing until
-  // someone taps the search box again. Checked frequently rather than only
-  // on blur because blur's `relatedTarget` isn't reliable on touch devices.
-  // Never steals focus from another real input/textarea/select — e.g. the
-  // expiry-sale price field — so typing there is never interrupted.
+  // someone taps back into a field. Checked frequently rather than only on
+  // blur because blur's `relatedTarget` isn't reliable on touch devices.
+  // Never steals focus from a real input/textarea/select — tapping the
+  // visible search box (or the expiry-sale price field) to type manually
+  // always keeps working normally.
   useEffect(() => {
-    searchRef.current?.focus();
+    scanRef.current?.focus();
     const id = setInterval(() => {
       const active = document.activeElement;
       const tag = active?.tagName;
-      if (active !== searchRef.current && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
-        searchRef.current?.focus();
+      if (active !== scanRef.current && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        scanRef.current?.focus();
       }
     }, 400);
     return () => clearInterval(id);
@@ -166,35 +170,55 @@ export function CatalogCart({
     return undefined;
   }
 
-  function processScan(value: string) {
+  function isCompleteScan(value: string) {
+    return SKU_COMPLETE_PATTERN.test(value) || (value.startsWith(ITEM_QR_PREFIX) && value.length >= LEGACY_QR_CODE_LENGTH);
+  }
+
+  function processScan(value: string, clearBuffer: () => void) {
     const item = findScannedItem(value);
-    setSearch("");
+    clearBuffer();
     if (item) {
       addToCart(item);
       showToast(`Scanned: ${item.name}`);
     } else {
       showToast("Unknown barcode — item not found");
     }
-    searchRef.current?.focus();
+    scanRef.current?.focus();
   }
 
+  // Hidden scan input — this is where scans land by default (see the focus
+  // effect above), so this is the primary path in normal use.
+  function handleScanBufferChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setScanBuffer(value);
+    const trimmed = value.trim();
+    if (isCompleteScan(trimmed)) processScan(trimmed, () => setScanBuffer(""));
+  }
+
+  function handleScanBufferKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    const value = scanBuffer.trim();
+    if (!isCompleteScan(value)) return;
+    e.preventDefault();
+    processScan(value, () => setScanBuffer(""));
+  }
+
+  // Visible search box — only reached if someone deliberately tapped it to
+  // type a manual search, but still recognizes a scan landing here too (e.g.
+  // if a scan happens to arrive mid-manual-search) so nothing silently fails.
   function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setSearch(value);
     const trimmed = value.trim();
-    if (SKU_COMPLETE_PATTERN.test(trimmed)) {
-      processScan(trimmed);
-    } else if (trimmed.startsWith(ITEM_QR_PREFIX) && trimmed.length >= LEGACY_QR_CODE_LENGTH) {
-      processScan(trimmed);
-    }
+    if (isCompleteScan(trimmed)) processScan(trimmed, () => setSearch(""));
   }
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     const value = search.trim();
-    if (!SKU_COMPLETE_PATTERN.test(value) && !value.startsWith(ITEM_QR_PREFIX)) return; // plain typing
+    if (!isCompleteScan(value)) return; // plain typing
     e.preventDefault();
-    processScan(value); // fallback for scanners that do send Enter
+    processScan(value, () => setSearch("")); // fallback for scanners that do send Enter
   }
 
   function checkout(paymentMethod: PaymentMethod) {
@@ -214,6 +238,22 @@ export function CatalogCart({
     <div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         <div>
+          {/* Invisible — exists only so a scanner always has a focused input
+              to "type" into without ever popping up an on-screen keyboard. */}
+          <input
+            ref={scanRef}
+            value={scanBuffer}
+            onChange={handleScanBufferChange}
+            onKeyDown={handleScanBufferKeyDown}
+            inputMode="none"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="absolute h-0 w-0 overflow-hidden opacity-0"
+          />
           <input
             ref={searchRef}
             value={search}
