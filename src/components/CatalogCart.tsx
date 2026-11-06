@@ -29,9 +29,23 @@ export function CatalogCart({
   const vendorById = useMemo(() => new Map(vendors.map((v) => [v.id, v])), [vendors]);
 
   // Keep the search box focused so a USB/Bluetooth barcode scanner (which just
-  // "types" into whatever input is focused) can be scanned into straight away.
+  // "types" into whatever input is focused) always has somewhere to type into
+  // — without this, tapping a grid item, a qty +/-, or anywhere else on the
+  // page moves focus away and the next scan silently does nothing until
+  // someone taps the search box again. Checked frequently rather than only
+  // on blur because blur's `relatedTarget` isn't reliable on touch devices.
+  // Never steals focus from another real input/textarea/select — e.g. the
+  // expiry-sale price field — so typing there is never interrupted.
   useEffect(() => {
     searchRef.current?.focus();
+    const id = setInterval(() => {
+      const active = document.activeElement;
+      const tag = active?.tagName;
+      if (active !== searchRef.current && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
+        searchRef.current?.focus();
+      }
+    }, 400);
+    return () => clearInterval(id);
   }, []);
 
   // While a scan is still arriving character-by-character, re-filtering the
