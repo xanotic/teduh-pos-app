@@ -25,7 +25,17 @@ function todayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; vendors: Vendor[] }) {
+export function ReceiptsClient({
+  receipts,
+  vendors,
+  showAll,
+  windowDays,
+}: {
+  receipts: ReceiptRow[];
+  vendors: Vendor[];
+  showAll: boolean;
+  windowDays: number;
+}) {
   const [date, setDate] = useState(todayLocal());
   const [note, setNote] = useState("");
   const [vendorId, setVendorId] = useState("");
@@ -245,6 +255,20 @@ export function ReceiptsClient({ receipts, vendors }: { receipts: ReceiptRow[]; 
         </p>
       )}
 
+      {!showAll && (
+        <p className="mt-2 text-center text-xs text-ink-muted">
+          Showing the last {windowDays} days only, to keep this page light.{" "}
+          <a href="?all=1" className="font-bold text-accent underline">
+            Load full history
+          </a>
+        </p>
+      )}
+      {showAll && (
+        <p className="mt-2 text-center text-xs text-ink-muted">
+          Showing full history. <a href="?" className="font-bold text-accent underline">Back to recent only</a>
+        </p>
+      )}
+
       {enlarged && enlarged.url && (
         <QrModal
           url={enlarged.url}
@@ -294,6 +318,7 @@ function ReceiptCard({
           src={receipt.url}
           alt={receipt.note ?? "Receipt"}
           onClick={onEnlarge}
+          loading="lazy"
           className="aspect-square w-full cursor-zoom-in rounded-lg object-cover"
         />
       ) : (

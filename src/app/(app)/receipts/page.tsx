@@ -4,16 +4,37 @@ import { ReceiptsClient } from "./ReceiptsClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReceiptsPage() {
+// Every receipt photo ever uploaded used to get a fresh signed url and get
+// downloaded by the browser on every single page view (date/vendor search
+// only filtered what was shown *after* everything was already fetched) — for
+// a business with months of receipts, that meant re-downloading the entire
+// photo history on every visit. Default to a recent window instead; the full
+// history is still one click away via ?all=1.
+const DEFAULT_WINDOW_DAYS = 60;
+
+export default async function ReceiptsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
   const { supabase, businessId } = await getBusinessContext();
+  const { all } = await searchParams;
+  const showAll = all === "1";
+
+  let receiptsQuery = supabase
+    .from("receipts")
+    .select("id, receipt_date, note, vendor_id, image_path, created_at")
+    .eq("business_id", businessId)
+    .order("receipt_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (!showAll) {
+    const cutoff = new Date(Date.now() - DEFAULT_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    receiptsQuery = receiptsQuery.gte("receipt_date", cutoff);
+  }
 
   const [{ data: receipts }, { data: vendors }] = await Promise.all([
-    supabase
-      .from("receipts")
-      .select("id, receipt_date, note, vendor_id, image_path, created_at")
-      .eq("business_id", businessId)
-      .order("receipt_date", { ascending: false })
-      .order("created_at", { ascending: false }),
+    receiptsQuery,
     supabase.from("vendors").select("*").eq("business_id", businessId).order("name"),
   ]);
 
@@ -34,5 +55,12 @@ export default async function ReceiptsPage() {
     uploadedAt: r.created_at as string,
   }));
 
-  return <ReceiptsClient receipts={rows} vendors={(vendors ?? []) as Vendor[]} />;
+  return (
+    <ReceiptsClient
+      receipts={rows}
+      vendors={(vendors ?? []) as Vendor[]}
+      showAll={showAll}
+      windowDays={DEFAULT_WINDOW_DAYS}
+    />
+  );
 }
